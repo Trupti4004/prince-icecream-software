@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Prince Ice Cream – Billing</title>
+    <title>Prince Ice Cream – Wholesale Billing</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -12,8 +12,8 @@
 
 <div class="container">
 
+    <!-- MASTER SECTION -->
     <div class="flex">
-        <!-- ADD VENDOR -->
         <div class="card">
             <h3>Add Vendor</h3>
             <form method="post">
@@ -22,7 +22,6 @@
             </form>
         </div>
 
-        <!-- ADD PRODUCT -->
         <div class="card">
             <h3>Add Product</h3>
             <form method="post">
@@ -30,6 +29,37 @@
                 <button>Add Product</button>
             </form>
         </div>
+    </div>
+
+    <!-- PURCHASE ENTRY -->
+    <div class="card">
+        <h3>Purchase Entry</h3>
+        <form method="post">
+            <label>Vendor</label>
+            <select name="vendor" required>
+                {% for v in vendors %}
+                <option value="{{ v[0] }}">{{ v[0] }}</option>
+                {% endfor %}
+            </select>
+
+            <label>Product</label>
+            <select name="product" required>
+                {% for p in products %}
+                <option value="{{ p[0] }}">{{ p[0] }}</option>
+                {% endfor %}
+            </select>
+
+            <label>Purchase Date</label>
+            <input type="date" name="purchase_date" required>
+
+            <label>Total Amount</label>
+            <input type="number" name="total_amount" required>
+
+            <label>Advance Received</label>
+            <input type="number" name="advance" required>
+
+            <button>Save Entry</button>
+        </form>
     </div>
 
     <!-- FILTER -->
@@ -62,10 +92,9 @@
         </form>
     </div>
 
-    <!-- PURCHASE TABLE -->
+    <!-- RECORDS -->
     <div class="card">
         <h3>Purchase Records</h3>
-
         <table>
             <tr>
                 <th>Vendor</th>
