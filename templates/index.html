@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Prince Ice Cream – Wholesale Billing</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<h2>🍦 Prince Ice Cream – Wholesale Sales & Payment</h2>
+
+<div class="card">
+    <h3>Add Vendor</h3>
+    <form method="post">
+        <input type="text" name="new_vendor" placeholder="Enter Vendor Name" required>
+        <button type="submit">Add Vendor</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Add Product</h3>
+    <form method="post">
+        <input type="text" name="new_product" placeholder="Enter Product Name" required>
+        <button type="submit">Add Product</button>
+    </form>
+</div>
+
+<div class="card">
+    <h3>Wholesale Sale Entry</h3>
+    <form method="post">
+        <label>Vendor</label><br>
+        <select name="vendor" required>
+            {% for v in vendors %}
+            <option value="{{ v[0] }}">{{ v[0] }}</option>
+            {% endfor %}
+        </select><br><br>
+
+        <label>Product</label><br>
+        <select name="product" required>
+            {% for p in products %}
+            <option value="{{ p[0] }}">{{ p[0] }}</option>
+            {% endfor %}
+        </select><br><br>
+
+        <label>Purchase Date</label><br>
+        <input type="date" name="purchase_date" required><br><br>
+
+        <label>Total Amount</label><br>
+        <input type="number" name="total_amount" required><br><br>
+
+        <label>Advance Received</label><br>
+        <input type="number" name="advance" required><br><br>
+
+        <button type="submit">Save Entry</button>
+    </form>
+</div>
+
+<h3>Purchase Records</h3>
+
+<table>
+    <tr>
+        <th>Vendor</th>
+        <th>Product</th>
+        <th>Date</th>
+        <th>Total</th>
+        <th>Advance</th>
+        <th>Pending</th>
+        <th>Print</th>
+    </tr>
+    {% for row in purchases %}
+    <tr>
+        <td>{{ row[1] }}</td>
+        <td>{{ row[2] }}</td>
+        <td>{{ row[3] }}</td>
+        <td>₹{{ row[4] }}</td>
+        <td>₹{{ row[5] }}</td>
+        <td>₹{{ row[6] }}</td>
+        <td>
+            <button onclick="printBill('{{ row[1] }}','{{ row[2] }}','{{ row[3] }}','{{ row[4] }}','{{ row[5] }}','{{ row[6] }}')">
+                Print
+            </button>
+        </td>
+    </tr>
+    {% endfor %}
+</table>
+
+<script>
+function printBill(vendor, product, date, total, advance, pending) {
+    let bill = `
+        <h2 style="text-align:center;">Prince Ice Cream</h2>
+        <p style="text-align:center;">Wholesale Sales Bill</p>
+        <hr>
+        <p><b>Vendor:</b> ${vendor}</p>
+        <p><b>Product:</b> ${product}</p>
+        <p><b>Date:</b> ${date}</p>
+        <p><b>Total Amount:</b> ₹${total}</p>
+        <p><b>Advance:</b> ₹${advance}</p>
+        <p><b>Pending:</b> ₹${pending}</p>
+        <hr>
+        <p style="text-align:center;">Thank you for your business</p>
+    `;
+    let win = window.open('', '', 'width=600,height=600');
+    win.document.write(bill);
+    win.print();
+}
+</script>
+
+</body>
+</html>
