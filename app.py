@@ -8,7 +8,7 @@ def index():
     conn = sqlite3.connect("database.db")
     cur = conn.cursor()
 
-    # -------- CREATE TABLES --------
+    # ---------- CREATE TABLES ----------
     cur.execute("""
         CREATE TABLE IF NOT EXISTS vendor (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,20 +36,24 @@ def index():
         )
     """)
 
-    # -------- HANDLE POST --------
+    # ---------- HANDLE POST ----------
     if request.method == "POST":
 
         # Add Vendor
         if request.form.get("new_vendor"):
-            cur.execute("INSERT INTO vendor (name) VALUES (?)",
-                        (request.form.get("new_vendor"),))
+            cur.execute(
+                "INSERT INTO vendor (name) VALUES (?)",
+                (request.form.get("new_vendor"),)
+            )
             conn.commit()
             return redirect("/")
-        
+
         # Add Product
         if request.form.get("new_product"):
-            cur.execute("INSERT INTO product (name) VALUES (?)",
-                        (request.form.get("new_product"),))
+            cur.execute(
+                "INSERT INTO product (name) VALUES (?)",
+                (request.form.get("new_product"),)
+            )
             conn.commit()
             return redirect("/")
 
@@ -62,8 +66,11 @@ def index():
             old_pending = cur.fetchone()[0]
 
             new_pending = old_pending - received
-            status = "Cleared" if new_pending <= 0 else "Pending"
-            new_pending = max(new_pending, 0)
+            if new_pending <= 0:
+                new_pending = 0
+                status = "Cleared"
+            else:
+                status = "Pending"
 
             cur.execute("""
                 UPDATE purchase
@@ -93,7 +100,7 @@ def index():
         conn.commit()
         return redirect("/")
 
-    # -------- FILTER LOGIC --------
+    # ---------- FILTERS ----------
     filter_vendor = request.args.get("filter_vendor")
     from_date = request.args.get("from_date")
     to_date = request.args.get("to_date")
@@ -109,9 +116,12 @@ def index():
         query += " AND purchase_date BETWEEN ? AND ?"
         params.extend([from_date, to_date])
 
-    # -------- FETCH DATA --------
+    # ---------- FETCH DATA ----------
     cur.execute("SELECT name FROM vendor")
     vendors = cur.fetchall()
+
+    cur.execute("SELECT name FROM product")
+    products = cur.fetchall()
 
     cur.execute(query, params)
     purchases = cur.fetchall()
@@ -121,6 +131,7 @@ def index():
     return render_template(
         "index.html",
         vendors=vendors,
+        products=products,
         purchases=purchases
     )
 
