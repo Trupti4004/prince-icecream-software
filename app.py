@@ -1,40 +1,46 @@
 from flask import Flask, render_template, request, redirect
-import sqlite3
+import psycopg2
+import os
 
 app = Flask(__name__)
 
+def get_db_connection():
+    return psycopg2.connect(os.environ["DATABASE_URL"])
+
 @app.route("/", methods=["GET", "POST"])
 def index():
-    conn = sqlite3.connect("database.db")
+    conn = get_db_connection()
     cur = conn.cursor()
 
     # ---------- CREATE TABLES ----------
     cur.execute("""
         CREATE TABLE IF NOT EXISTS vendor (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL
         )
     """)
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS product (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             name TEXT NOT NULL
         )
     """)
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS purchase (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             vendor TEXT,
             product TEXT,
-            purchase_date TEXT,
-            total_amount REAL,
-            advance REAL,
-            pending REAL,
+            purchase_date DATE,
+            total_amount NUMERIC,
+            advance NUMERIC,
+            pending NUMERIC,
             status TEXT
         )
     """)
+
+    conn.commit()
 
     # ---------- HANDLE POST ----------
     if request.method == "POST":
@@ -42,7 +48,7 @@ def index():
         # Add Vendor
         if request.form.get("new_vendor"):
             cur.execute(
-                "INSERT INTO vendor (name) VALUES (?)",
+                "INSERT INTO vendor (name) VALUES (%s)",
                 (request.form.get("new_vendor"),)
             )
             conn.commit()
@@ -51,7 +57,7 @@ def index():
         # Add Product
         if request.form.get("new_product"):
             cur.execute(
-                "INSERT INTO product (name) VALUES (?)",
+                "INSERT INTO product (name) VALUES (%s)",
                 (request.form.get("new_product"),)
             )
             conn.commit()
@@ -62,7 +68,7 @@ def index():
             pay_id = int(request.form.get("pay_id"))
             received = float(request.form.get("received_amount"))
 
-            cur.execute("SELECT pending FROM purchase WHERE id=?", (pay_id,))
+            cur.execute("SELECT pending FROM purchase WHERE id=%s", (pay_id,))
             old_pending = cur.fetchone()[0]
 
             new_pending = old_pending - received
@@ -74,8 +80,8 @@ def index():
 
             cur.execute("""
                 UPDATE purchase
-                SET pending=?, status=?
-                WHERE id=?
+                SET pending=%s, status=%s
+                WHERE id=%s
             """, (new_pending, status, pay_id))
 
             conn.commit()
@@ -94,13 +100,13 @@ def index():
         cur.execute("""
             INSERT INTO purchase
             (vendor, product, purchase_date, total_amount, advance, pending, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (vendor, product, purchase_date, total, advance, pending, status))
 
         conn.commit()
         return redirect("/")
 
-    # ---------- FILTERS ----------
+    # ---------- FILTER ----------
     filter_vendor = request.args.get("filter_vendor")
     from_date = request.args.get("from_date")
     to_date = request.args.get("to_date")
@@ -109,11 +115,11 @@ def index():
     params = []
 
     if filter_vendor:
-        query += " AND vendor=?"
+        query += " AND vendor=%s"
         params.append(filter_vendor)
 
     if from_date and to_date:
-        query += " AND purchase_date BETWEEN ? AND ?"
+        query += " AND purchase_date BETWEEN %s AND %s"
         params.extend([from_date, to_date])
 
     # ---------- FETCH DATA ----------
