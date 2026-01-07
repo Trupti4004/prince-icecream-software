@@ -1,13 +1,15 @@
-from flask import Flask, render_template, request, redirect, session, url_for
+from flask import Flask, render_template, request, redirect, session
 import psycopg2, os
 from decimal import Decimal
-from datetime import date
 
 app = Flask(__name__)
 app.secret_key = "prince_icecream_secret"
 
 def get_db():
-    return psycopg2.connect(os.environ["DATABASE_URL"], sslmode="require")
+    return psycopg2.connect(
+        os.environ["DATABASE_URL"],
+        sslmode="require"
+    )
 
 # ---------------- LOGIN ----------------
 @app.route("/login", methods=["GET", "POST"])
@@ -22,14 +24,13 @@ def login():
             password TEXT
         )
     """)
-
     conn.commit()
 
-    # default admin
-    cur.execute("SELECT * FROM users")
-    if not cur.fetchone():
+    # default admin user
+    cur.execute("SELECT COUNT(*) FROM users")
+    if cur.fetchone()[0] == 0:
         cur.execute(
-            "INSERT INTO users (username, password) VALUES (%s,%s)",
+            "INSERT INTO users (username, password) VALUES (%s, %s)",
             ("admin", "admin123")
         )
         conn.commit()
@@ -43,7 +44,9 @@ def login():
         )
         if cur.fetchone():
             session["user"] = u
+            conn.close()
             return redirect("/")
+
     conn.close()
     return render_template("login.html")
 
@@ -61,40 +64,59 @@ def index():
     conn = get_db()
     cur = conn.cursor()
 
-    # Tables
-    cur.execute("""CREATE TABLE IF NOT EXISTS vendor (
-        id SERIAL PRIMARY KEY, name TEXT)""")
+    # ---------- TABLES ----------
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS vendor (
+            id SERIAL PRIMARY KEY,
+            name TEXT
+        )
+    """)
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS product (
-        id SERIAL PRIMARY KEY, name TEXT)""")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS product (
+            id SERIAL PRIMARY KEY,
+            name TEXT
+        )
+    """)
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS purchase (
-        id SERIAL PRIMARY KEY,
-        vendor TEXT, product TEXT,
-        purchase_date DATE,
-        total NUMERIC, advance NUMERIC,
-        pending NUMERIC, status TEXT)""")
-
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS purchase (
+            id SERIAL PRIMARY KEY,
+            vendor TEXT,
+            product TEXT,
+            purchase_date DATE,
+            total NUMERIC,
+            advance NUMERIC,
+            pending NUMERIC,
+            status TEXT
+        )
+    """)
     conn.commit()
 
-    # ----- POST actions -----
+    # ---------- POST ACTIONS ----------
     if request.method == "POST":
 
         if request.form.get("new_vendor"):
-            cur.execute("INSERT INTO vendor(name) VALUES(%s)",
-                        (request.form["new_vendor"],))
+            cur.execute(
+                "INSERT INTO vendor(name) VALUES(%s)",
+                (request.form["new_vendor"],)
+            )
             conn.commit()
             return redirect("/")
 
         if request.form.get("new_product"):
-            cur.execute("INSERT INTO product(name) VALUES(%s)",
-                        (request.form["new_product"],))
+            cur.execute(
+                "INSERT INTO product(name) VALUES(%s)",
+                (request.form["new_product"],)
+            )
             conn.commit()
             return redirect("/")
 
         if request.form.get("delete_id"):
-            cur.execute("DELETE FROM purchase WHERE id=%s",
-                        (request.form["delete_id"],))
+            cur.execute(
+                "DELETE FROM purchase WHERE id=%s",
+                (request.form["delete_id"],)
+            )
             conn.commit()
             return redirect("/")
 
@@ -102,21 +124,21 @@ def index():
             pid = int(request.form["pay_id"])
             received = Decimal(request.form["received"])
             cur.execute("SELECT pending FROM purchase WHERE id=%s", (pid,))
-            old = Decimal(cur.fetchone()[0])
-            new = old - received
-            status = "Cleared" if new <= 0 else "Pending"
-            new = max(new, 0)
+            old_pending = Decimal(cur.fetchone()[0])
+            new_pending = old_pending - received
+            status = "Cleared" if new_pending <= 0 else "Pending"
+            new_pending = max(new_pending, 0)
             cur.execute(
                 "UPDATE purchase SET pending=%s, status=%s WHERE id=%s",
-                (new, status, pid)
+                (new_pending, status, pid)
             )
             conn.commit()
             return redirect("/")
 
-        # purchase entry
+        # Purchase entry
         total = Decimal(request.form["total"])
-        adv = Decimal(request.form["advance"])
-        pending = total - adv
+        advance = Decimal(request.form["advance"])
+        pending = total - advance
         status = "Cleared" if pending <= 0 else "Pending"
 
         cur.execute("""
@@ -127,22 +149,24 @@ def index():
             request.form["vendor"],
             request.form["product"],
             request.form["date"],
-            total, adv, pending, status
+            total, advance, pending, status
         ))
         conn.commit()
         return redirect("/")
 
-    # ----- DASHBOARD -----
+    # ---------- DASHBOARD ----------
     cur.execute("""
         SELECT
-        COALESCE(SUM(total),0),
-        COALESCE(SUM(advance),0),
-        COALESCE(SUM(pending),0)
+            COALESCE(SUM(total),0),
+            COALESCE(SUM(advance),0),
+            COALESCE(SUM(pending),0)
         FROM purchase
-        WHERE DATE_TRUNC('month', purchase_date)=DATE_TRUNC('month', CURRENT_DATE)
+        WHERE DATE_TRUNC('month', purchase_date)
+              = DATE_TRUNC('month', CURRENT_DATE)
     """)
-    total, received, pending = cur.fetchone()
+    total_sum, received_sum, pending_sum = cur.fetchone()
 
+    # ---------- FETCH DATA ----------
     cur.execute("SELECT name FROM vendor")
     vendors = cur.fetchall()
 
@@ -159,9 +183,9 @@ def index():
         vendors=vendors,
         products=products,
         purchases=purchases,
-        total=total,
-        received=received,
-        pending=pending
+        total=total_sum,
+        received=received_sum,
+        pending=pending_sum
     )
 
 if __name__ == "__main__":
