@@ -26,11 +26,10 @@ def login():
     """)
     conn.commit()
 
-    # create default admin if none exists
     cur.execute("SELECT COUNT(*) FROM users")
     if cur.fetchone()[0] == 0:
         cur.execute(
-            "INSERT INTO users (username, password) VALUES (%s, %s)",
+            "INSERT INTO users (username, password) VALUES (%s,%s)",
             ("admin", "admin123")
         )
         conn.commit()
@@ -89,7 +88,7 @@ def index():
     """)
     conn.commit()
 
-    # ---------- SAFE SCHEMA MIGRATION ----------
+    # ---------- SAFE MIGRATION ----------
     cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS total NUMERIC")
     cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS advance NUMERIC")
     cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS pending NUMERIC")
@@ -158,7 +157,23 @@ def index():
         conn.commit()
         return redirect("/")
 
-    # ---------- DASHBOARD (SAFE) ----------
+    # ---------- FILTER ----------
+    filter_vendor = request.args.get("filter_vendor")
+    from_date = request.args.get("from_date")
+    to_date = request.args.get("to_date")
+
+    query = "SELECT * FROM purchase WHERE 1=1"
+    params = []
+
+    if filter_vendor:
+        query += " AND vendor=%s"
+        params.append(filter_vendor)
+
+    if from_date and to_date:
+        query += " AND purchase_date BETWEEN %s AND %s"
+        params.extend([from_date, to_date])
+
+    # ---------- DASHBOARD ----------
     cur.execute("""
         SELECT
             COALESCE(SUM(total),0),
@@ -169,10 +184,7 @@ def index():
           AND DATE_TRUNC('month', purchase_date)
               = DATE_TRUNC('month', CURRENT_DATE)
     """)
-    row = cur.fetchone()
-    total_sum = row[0] or 0
-    received_sum = row[1] or 0
-    pending_sum = row[2] or 0
+    total_sum, received_sum, pending_sum = cur.fetchone()
 
     # ---------- FETCH DATA ----------
     cur.execute("SELECT name FROM vendor")
@@ -181,7 +193,7 @@ def index():
     cur.execute("SELECT name FROM product")
     products = cur.fetchall()
 
-    cur.execute("SELECT * FROM purchase ORDER BY id DESC")
+    cur.execute(query + " ORDER BY id DESC", params)
     purchases = cur.fetchall()
 
     conn.close()
