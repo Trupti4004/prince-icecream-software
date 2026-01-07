@@ -26,7 +26,7 @@ def login():
     """)
     conn.commit()
 
-    # default admin user
+    # create default admin if none exists
     cur.execute("SELECT COUNT(*) FROM users")
     if cur.fetchone()[0] == 0:
         cur.execute(
@@ -84,13 +84,16 @@ def index():
             id SERIAL PRIMARY KEY,
             vendor TEXT,
             product TEXT,
-            purchase_date DATE,
-            total NUMERIC,
-            advance NUMERIC,
-            pending NUMERIC,
-            status TEXT
+            purchase_date DATE
         )
     """)
+    conn.commit()
+
+    # ---------- SAFE SCHEMA MIGRATION ----------
+    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS total NUMERIC")
+    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS advance NUMERIC")
+    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS pending NUMERIC")
+    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS status TEXT")
     conn.commit()
 
     # ---------- POST ACTIONS ----------
@@ -124,10 +127,11 @@ def index():
             pid = int(request.form["pay_id"])
             received = Decimal(request.form["received"])
             cur.execute("SELECT pending FROM purchase WHERE id=%s", (pid,))
-            old_pending = Decimal(cur.fetchone()[0])
+            old_pending = Decimal(cur.fetchone()[0] or 0)
             new_pending = old_pending - received
             status = "Cleared" if new_pending <= 0 else "Pending"
             new_pending = max(new_pending, 0)
+
             cur.execute(
                 "UPDATE purchase SET pending=%s, status=%s WHERE id=%s",
                 (new_pending, status, pid)
@@ -154,17 +158,21 @@ def index():
         conn.commit()
         return redirect("/")
 
-    # ---------- DASHBOARD ----------
+    # ---------- DASHBOARD (SAFE) ----------
     cur.execute("""
         SELECT
             COALESCE(SUM(total),0),
             COALESCE(SUM(advance),0),
             COALESCE(SUM(pending),0)
         FROM purchase
-        WHERE DATE_TRUNC('month', purchase_date)
+        WHERE purchase_date IS NOT NULL
+          AND DATE_TRUNC('month', purchase_date)
               = DATE_TRUNC('month', CURRENT_DATE)
     """)
-    total_sum, received_sum, pending_sum = cur.fetchone()
+    row = cur.fetchone()
+    total_sum = row[0] or 0
+    received_sum = row[1] or 0
+    pending_sum = row[2] or 0
 
     # ---------- FETCH DATA ----------
     cur.execute("SELECT name FROM vendor")
