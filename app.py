@@ -1,139 +1,155 @@
-from flask import Flask, render_template, request, redirect
-import psycopg2
-import os
+from flask import Flask, render_template, request, redirect, session, url_for
+import psycopg2, os
+from decimal import Decimal
+from datetime import date
 
 app = Flask(__name__)
+app.secret_key = "prince_icecream_secret"
 
-def get_db_connection():
-    return psycopg2.connect(
-        os.environ["DATABASE_URL"],
-        sslmode="require"
-    )
+def get_db():
+    return psycopg2.connect(os.environ["DATABASE_URL"], sslmode="require")
 
-
-@app.route("/", methods=["GET", "POST"])
-def index():
-    conn = get_db_connection()
+# ---------------- LOGIN ----------------
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    conn = get_db()
     cur = conn.cursor()
 
-    # ---------- CREATE TABLES ----------
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS vendor (
+        CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS product (
-            id SERIAL PRIMARY KEY,
-            name TEXT NOT NULL
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS purchase (
-            id SERIAL PRIMARY KEY,
-            vendor TEXT,
-            product TEXT,
-            purchase_date DATE,
-            total_amount NUMERIC,
-            advance NUMERIC,
-            pending NUMERIC,
-            status TEXT
+            username TEXT,
+            password TEXT
         )
     """)
 
     conn.commit()
 
-    # ---------- HANDLE POST ----------
+    # default admin
+    cur.execute("SELECT * FROM users")
+    if not cur.fetchone():
+        cur.execute(
+            "INSERT INTO users (username, password) VALUES (%s,%s)",
+            ("admin", "admin123")
+        )
+        conn.commit()
+
+    if request.method == "POST":
+        u = request.form["username"]
+        p = request.form["password"]
+        cur.execute(
+            "SELECT * FROM users WHERE username=%s AND password=%s",
+            (u, p)
+        )
+        if cur.fetchone():
+            session["user"] = u
+            return redirect("/")
+    conn.close()
+    return render_template("login.html")
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/login")
+
+# ---------------- MAIN PAGE ----------------
+@app.route("/", methods=["GET", "POST"])
+def index():
+    if "user" not in session:
+        return redirect("/login")
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    # Tables
+    cur.execute("""CREATE TABLE IF NOT EXISTS vendor (
+        id SERIAL PRIMARY KEY, name TEXT)""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS product (
+        id SERIAL PRIMARY KEY, name TEXT)""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS purchase (
+        id SERIAL PRIMARY KEY,
+        vendor TEXT, product TEXT,
+        purchase_date DATE,
+        total NUMERIC, advance NUMERIC,
+        pending NUMERIC, status TEXT)""")
+
+    conn.commit()
+
+    # ----- POST actions -----
     if request.method == "POST":
 
-        # Add Vendor
         if request.form.get("new_vendor"):
-            cur.execute(
-                "INSERT INTO vendor (name) VALUES (%s)",
-                (request.form.get("new_vendor"),)
-            )
+            cur.execute("INSERT INTO vendor(name) VALUES(%s)",
+                        (request.form["new_vendor"],))
             conn.commit()
             return redirect("/")
 
-        # Add Product
         if request.form.get("new_product"):
+            cur.execute("INSERT INTO product(name) VALUES(%s)",
+                        (request.form["new_product"],))
+            conn.commit()
+            return redirect("/")
+
+        if request.form.get("delete_id"):
+            cur.execute("DELETE FROM purchase WHERE id=%s",
+                        (request.form["delete_id"],))
+            conn.commit()
+            return redirect("/")
+
+        if request.form.get("pay_id"):
+            pid = int(request.form["pay_id"])
+            received = Decimal(request.form["received"])
+            cur.execute("SELECT pending FROM purchase WHERE id=%s", (pid,))
+            old = Decimal(cur.fetchone()[0])
+            new = old - received
+            status = "Cleared" if new <= 0 else "Pending"
+            new = max(new, 0)
             cur.execute(
-                "INSERT INTO product (name) VALUES (%s)",
-                (request.form.get("new_product"),)
+                "UPDATE purchase SET pending=%s, status=%s WHERE id=%s",
+                (new, status, pid)
             )
             conn.commit()
             return redirect("/")
 
-        # Update Payment
-        if request.form.get("pay_id"):
-            pay_id = int(request.form.get("pay_id"))
-            received = float(request.form.get("received_amount"))
-
-            cur.execute("SELECT pending FROM purchase WHERE id=%s", (pay_id,))
-            old_pending = cur.fetchone()[0]
-
-            new_pending = old_pending - received
-            if new_pending <= 0:
-                new_pending = 0
-                status = "Cleared"
-            else:
-                status = "Pending"
-
-            cur.execute("""
-                UPDATE purchase
-                SET pending=%s, status=%s
-                WHERE id=%s
-            """, (new_pending, status, pay_id))
-
-            conn.commit()
-            return redirect("/")
-
-        # Add Purchase Entry
-        vendor = request.form.get("vendor")
-        product = request.form.get("product")
-        purchase_date = request.form.get("purchase_date")
-        total = float(request.form.get("total_amount"))
-        advance = float(request.form.get("advance"))
-
-        pending = total - advance
-        status = "Cleared" if pending == 0 else "Pending"
+        # purchase entry
+        total = Decimal(request.form["total"])
+        adv = Decimal(request.form["advance"])
+        pending = total - adv
+        status = "Cleared" if pending <= 0 else "Pending"
 
         cur.execute("""
             INSERT INTO purchase
-            (vendor, product, purchase_date, total_amount, advance, pending, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """, (vendor, product, purchase_date, total, advance, pending, status))
-
+            (vendor, product, purchase_date, total, advance, pending, status)
+            VALUES (%s,%s,%s,%s,%s,%s,%s)
+        """, (
+            request.form["vendor"],
+            request.form["product"],
+            request.form["date"],
+            total, adv, pending, status
+        ))
         conn.commit()
         return redirect("/")
 
-    # ---------- FILTER ----------
-    filter_vendor = request.args.get("filter_vendor")
-    from_date = request.args.get("from_date")
-    to_date = request.args.get("to_date")
+    # ----- DASHBOARD -----
+    cur.execute("""
+        SELECT
+        COALESCE(SUM(total),0),
+        COALESCE(SUM(advance),0),
+        COALESCE(SUM(pending),0)
+        FROM purchase
+        WHERE DATE_TRUNC('month', purchase_date)=DATE_TRUNC('month', CURRENT_DATE)
+    """)
+    total, received, pending = cur.fetchone()
 
-    query = "SELECT * FROM purchase WHERE 1=1"
-    params = []
-
-    if filter_vendor:
-        query += " AND vendor=%s"
-        params.append(filter_vendor)
-
-    if from_date and to_date:
-        query += " AND purchase_date BETWEEN %s AND %s"
-        params.extend([from_date, to_date])
-
-    # ---------- FETCH DATA ----------
     cur.execute("SELECT name FROM vendor")
     vendors = cur.fetchall()
 
     cur.execute("SELECT name FROM product")
     products = cur.fetchall()
 
-    cur.execute(query, params)
+    cur.execute("SELECT * FROM purchase ORDER BY id DESC")
     purchases = cur.fetchall()
 
     conn.close()
@@ -142,7 +158,10 @@ def index():
         "index.html",
         vendors=vendors,
         products=products,
-        purchases=purchases
+        purchases=purchases,
+        total=total,
+        received=received,
+        pending=pending
     )
 
 if __name__ == "__main__":
