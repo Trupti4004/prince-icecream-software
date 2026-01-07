@@ -5,7 +5,11 @@ import os
 app = Flask(__name__)
 
 def get_db_connection():
-    return psycopg2.connect(os.environ["DATABASE_URL"])
+    return psycopg2.connect(
+        os.environ["DATABASE_URL"],
+        sslmode="require"
+    )
+
 
 @app.route("/", methods=["GET", "POST"])
 def index():
