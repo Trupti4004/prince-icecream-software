@@ -1,28 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Prince Ice Cream ERP</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<header>
+    🍦 Prince Ice Cream – Wholesale ERP
+    <span style="float:right;">
+        <a href="/logout" style="color:white;">Logout</a>
+    </span>
+</header>
+
+<div class="container">
+
+<!-- DASHBOARD -->
+<div class="flex">
+    <div class="card">
+        <h3>Total Sales (This Month)</h3>
+        <h2>₹ {{ total }}</h2>
+    </div>
+    <div class="card">
+        <h3>Received</h3>
+        <h2>₹ {{ received }}</h2>
+    </div>
+    <div class="card">
+        <h3>Pending</h3>
+        <h2>₹ {{ pending }}</h2>
+    </div>
+</div>
+
+<!-- MASTER -->
+<div class="flex">
+    <div class="card">
+        <h3>Add Vendor</h3>
+        <form method="post">
+            <input name="new_vendor" placeholder="Vendor Name" required>
+            <button>Add Vendor</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Add Product</h3>
+        <form method="post">
+            <input name="new_product" placeholder="Product Name" required>
+            <button>Add Product</button>
+        </form>
+    </div>
+</div>
+
+<!-- PURCHASE ENTRY -->
+<div class="card">
+    <h3>Purchase Entry</h3>
+    <form method="post">
+        <select name="vendor" required>
+            {% for v in vendors %}
+            <option>{{ v[0] }}</option>
+            {% endfor %}
+        </select>
+
+        <select name="product" required>
+            {% for p in products %}
+            <option>{{ p[0] }}</option>
+            {% endfor %}
+        </select>
+
+        <input type="date" name="date" required>
+        <input name="total" placeholder="Total Amount" required>
+        <input name="advance" placeholder="Advance" required>
+        <button>Save Entry</button>
+    </form>
+</div>
+
+<!-- FILTER -->
 <div class="card">
     <h3>Filter Records</h3>
     <form method="get" class="flex">
-        <div>
-            <label>Vendor</label>
-            <select name="filter_vendor">
-                <option value="">All Vendors</option>
-                {% for v in vendors %}
-                <option value="{{ v[0] }}">{{ v[0] }}</option>
-                {% endfor %}
-            </select>
-        </div>
+        <select name="filter_vendor">
+            <option value="">All Vendors</option>
+            {% for v in vendors %}
+            <option value="{{ v[0] }}">{{ v[0] }}</option>
+            {% endfor %}
+        </select>
 
-        <div>
-            <label>From Date</label>
-            <input type="date" name="from_date">
-        </div>
+        <input type="date" name="from_date">
+        <input type="date" name="to_date">
 
-        <div>
-            <label>To Date</label>
-            <input type="date" name="to_date">
-        </div>
-
-        <div style="align-self:end;">
-            <button type="submit">Apply Filter</button>
-        </div>
+        <button type="submit">Apply Filter</button>
     </form>
 </div>
+
+<!-- RECORDS -->
+<div class="card">
+    <h3>Purchase Records</h3>
+    <table>
+        <tr>
+            <th>Vendor</th>
+            <th>Product</th>
+            <th>Date</th>
+            <th>Total</th>
+            <th>Advance</th>
+            <th>Pending</th>
+            <th>Status</th>
+            <th>Payment</th>
+            <th>Delete</th>
+        </tr>
+
+        {% for r in purchases %}
+        <tr>
+            <td>{{ r[1] }}</td>
+            <td>{{ r[2] }}</td>
+            <td>{{ r[3] }}</td>
+            <td>₹ {{ r[4] }}</td>
+            <td>₹ {{ r[5] }}</td>
+            <td>₹ {{ r[6] }}</td>
+            <td>
+                {% if r[7] == "Pending" %}
+                <span class="status-pending">Pending</span>
+                {% else %}
+                <span class="status-cleared">Cleared</span>
+                {% endif %}
+            </td>
+            <td>
+                {% if r[7] == "Pending" %}
+                <form method="post">
+                    <input type="hidden" name="pay_id" value="{{ r[0] }}">
+                    <input name="received" placeholder="Amount" required>
+                    <button>Update</button>
+                </form>
+                {% else %}✔{% endif %}
+            </td>
+            <td>
+                <form method="post" onsubmit="return confirm('Delete entry?');">
+                    <input type="hidden" name="delete_id" value="{{ r[0] }}">
+                    <button style="background:#c0392b;">Delete</button>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+</div>
+
+<div class="footer">
+    © Prince Ice Cream ERP
+</div>
+
+</body>
+</html>
