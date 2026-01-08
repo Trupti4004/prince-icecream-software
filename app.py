@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, redirect, session
 import psycopg2, os
 from decimal import Decimal
-from datetime import date
 
 app = Flask(__name__)
 app.secret_key = "prince_icecream_secret"
@@ -24,8 +23,8 @@ def login():
     """)
     conn.commit()
 
-    cur.execute("SELECT * FROM users")
-    if not cur.fetchone():
+    cur.execute("SELECT COUNT(*) FROM users")
+    if cur.fetchone()[0] == 0:
         cur.execute(
             "INSERT INTO users (username,password) VALUES (%s,%s)",
             ("admin", "admin123")
@@ -41,6 +40,7 @@ def login():
         )
         if cur.fetchone():
             session["user"] = u
+            conn.close()
             return redirect("/")
 
     conn.close()
@@ -61,27 +61,44 @@ def index():
     cur = conn.cursor()
 
     # ---------- TABLES ----------
-    cur.execute("""CREATE TABLE IF NOT EXISTS vendor (
-        id SERIAL PRIMARY KEY, name TEXT)""")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS vendor (
+            id SERIAL PRIMARY KEY,
+            name TEXT
+        )
+    """)
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS product (
-        id SERIAL PRIMARY KEY, name TEXT)""")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS product (
+            id SERIAL PRIMARY KEY,
+            name TEXT
+        )
+    """)
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS ice_cream_type (
-        id SERIAL PRIMARY KEY, name TEXT)""")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS ice_cream_type (
+            id SERIAL PRIMARY KEY,
+            name TEXT
+        )
+    """)
 
-    cur.execute("""CREATE TABLE IF NOT EXISTS purchase (
-        id SERIAL PRIMARY KEY,
-        vendor TEXT,
-        product TEXT,
-        ice_cream_type TEXT,
-        quantity NUMERIC,
-        purchase_date DATE,
-        total NUMERIC,
-        advance NUMERIC,
-        pending NUMERIC,
-        status TEXT
-    )""")
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS purchase (
+            id SERIAL PRIMARY KEY,
+            vendor TEXT,
+            product TEXT,
+            purchase_date DATE,
+            total NUMERIC,
+            advance NUMERIC,
+            pending NUMERIC,
+            status TEXT
+        )
+    """)
+    conn.commit()
+
+    # ---------- SAFE MIGRATION (FOR OLD DATABASES) ----------
+    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS ice_cream_type TEXT")
+    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS quantity NUMERIC")
     conn.commit()
 
     # ---------- POST ----------
@@ -115,10 +132,11 @@ def index():
             pid = int(request.form["pay_id"])
             received = Decimal(request.form["received"])
             cur.execute("SELECT pending FROM purchase WHERE id=%s", (pid,))
-            old = Decimal(cur.fetchone()[0])
+            old = Decimal(cur.fetchone()[0] or 0)
             new = old - received
             status = "Cleared" if new <= 0 else "Pending"
             new = max(new, 0)
+
             cur.execute("""
                 UPDATE purchase SET pending=%s, status=%s WHERE id=%s
             """, (new, status, pid))
@@ -153,15 +171,15 @@ def index():
     fd = request.args.get("from_date")
     td = request.args.get("to_date")
 
-    q = "SELECT * FROM purchase WHERE 1=1"
-    p = []
+    query = "SELECT * FROM purchase WHERE 1=1"
+    params = []
 
     if fv:
-        q += " AND vendor=%s"
-        p.append(fv)
+        query += " AND vendor=%s"
+        params.append(fv)
     if fd and td:
-        q += " AND purchase_date BETWEEN %s AND %s"
-        p.extend([fd, td])
+        query += " AND purchase_date BETWEEN %s AND %s"
+        params.extend([fd, td])
 
     # ---------- DASHBOARD ----------
     cur.execute("""
@@ -176,12 +194,13 @@ def index():
 
     # Ice cream type analysis
     cur.execute("""
-        SELECT ice_cream_type, SUM(quantity)
+        SELECT ice_cream_type, COALESCE(SUM(quantity),0)
         FROM purchase
         GROUP BY ice_cream_type
     """)
     type_sales = cur.fetchall()
 
+    # ---------- FETCH ----------
     cur.execute("SELECT name FROM vendor")
     vendors = cur.fetchall()
 
@@ -191,7 +210,7 @@ def index():
     cur.execute("SELECT name FROM ice_cream_type")
     types = cur.fetchall()
 
-    cur.execute(q + " ORDER BY id DESC", p)
+    cur.execute(query + " ORDER BY id DESC", params)
     purchases = cur.fetchall()
 
     conn.close()
