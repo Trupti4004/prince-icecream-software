@@ -1,51 +1,99 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Vendor Sales</title>
+    <title>Prince Ice Cream – Vendor Sales</title>
+    <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<h2>Dashboard</h2>
-<p>Total: ₹{{ total_amt }} | Received: ₹{{ received_amt }} | Pending: ₹{{ pending_amt }}</p>
+<div class="container">
 
-<h3>Add Sale</h3>
-<form method="post">
-<select name="vendor">{% for v in vendors %}<option>{{ v[0] }}</option>{% endfor %}</select>
-<select name="product">{% for p in products %}<option>{{ p[0] }}</option>{% endfor %}</select>
-<input name="quantity" placeholder="Qty">
-<input name="paid" placeholder="Paid">
-<input type="date" name="date">
-<button>Save</button>
-</form>
+    <h1>🍦 Prince Ice Cream Dashboard
+        <a href="/logout" class="logout">Logout</a>
+    </h1>
 
-<h3>Records</h3>
-<table border="1">
-<tr>
-<th>Vendor</th><th>Product</th><th>Qty</th><th>Total</th><th>Paid</th><th>Pending</th><th>Status</th><th>Action</th>
-</tr>
-{% for r in sales %}
-<tr>
-<td>{{ r[1] }}</td>
-<td>{{ r[2] }}</td>
-<td>{{ r[3] }}</td>
-<td>{{ r[5] }}</td>
-<td>{{ r[6] }}</td>
-<td>{{ r[7] }}</td>
-<td>{{ r[9] }}</td>
-<td>
-{% if r[9] == "Pending" %}
-<form method="post">
-<input type="hidden" name="pay_id" value="{{ r[0] }}">
-<input name="received" placeholder="Pay">
-<button>Update</button>
-</form>
-{% endif %}
-</td>
-</tr>
-{% endfor %}
-</table>
+    <!-- DASHBOARD CARDS -->
+    <div class="cards">
+        <div class="card blue">
+            <h3>Total Amount</h3>
+            <h1>₹ {{ total_amt }}</h1>
+        </div>
 
-<a href="/logout">Logout</a>
+        <div class="card green">
+            <h3>Received</h3>
+            <h1>₹ {{ received_amt }}</h1>
+        </div>
+
+        <div class="card red">
+            <h3>Pending</h3>
+            <h1>₹ {{ pending_amt }}</h1>
+        </div>
+    </div>
+
+    <!-- FILTER -->
+    <div class="section">
+        <h2>Filter</h2>
+        <form method="get">
+            <select name="vendor">
+                <option value="">All Vendors</option>
+                {% for v in vendors %}
+                <option value="{{ v[0] }}">{{ v[0] }}</option>
+                {% endfor %}
+            </select>
+
+            <input type="date" name="from">
+            <input type="date" name="to">
+
+            <button type="submit">Apply Filter</button>
+        </form>
+    </div>
+
+    <!-- SALES TABLE -->
+    <div class="section">
+        <h2>Vendor-wise Product Sales</h2>
+
+        <table>
+            <tr>
+                <th>Vendor</th>
+                <th>Product</th>
+                <th>Qty</th>
+                <th>Total</th>
+                <th>Paid</th>
+                <th>Pending</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+
+            {% for r in sales %}
+            <tr>
+                <td>{{ r[1] }}</td>
+                <td>{{ r[2] }}</td>
+                <td>{{ r[3] }}</td>
+                <td>₹ {{ r[5] }}</td>
+                <td>₹ {{ r[6] }}</td>
+                <td>₹ {{ r[7] }}</td>
+                <td>
+                    {% if r[9] == "Pending" %}
+                    <span class="badge pending">Pending</span>
+                    {% else %}
+                    <span class="badge cleared">Cleared</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if r[9] == "Pending" %}
+                    <form method="post" style="display:flex; gap:5px;">
+                        <input type="hidden" name="pay_id" value="{{ r[0] }}">
+                        <input name="received" placeholder="Pay" style="width:70px;">
+                        <button>Update</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+</div>
 
 </body>
 </html>
