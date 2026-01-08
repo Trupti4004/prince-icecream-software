@@ -23,10 +23,11 @@ def login():
     """)
     conn.commit()
 
+    # create default admin once
     cur.execute("SELECT COUNT(*) FROM users")
     if cur.fetchone()[0] == 0:
         cur.execute(
-            "INSERT INTO users(username,password) VALUES(%s,%s)",
+            "INSERT INTO users (username,password) VALUES (%s,%s)",
             ("admin", "admin123")
         )
         conn.commit()
@@ -40,6 +41,7 @@ def login():
             session["user"] = request.form["username"]
             conn.close()
             return redirect("/")
+
     conn.close()
     return render_template("login.html")
 
@@ -58,17 +60,17 @@ def index():
     cur = conn.cursor()
 
     # ---------- TABLES ----------
-    cur.execute("CREATE TABLE IF NOT EXISTS vendor(id SERIAL PRIMARY KEY, name TEXT)")
-    cur.execute("CREATE TABLE IF NOT EXISTS product(id SERIAL PRIMARY KEY, name TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS vendor (id SERIAL PRIMARY KEY, name TEXT)")
+    cur.execute("CREATE TABLE IF NOT EXISTS product (id SERIAL PRIMARY KEY, name TEXT)")
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS rate_master(
+        CREATE TABLE IF NOT EXISTS rate_master (
             id SERIAL PRIMARY KEY,
             product TEXT,
             rate NUMERIC
         )
     """)
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS sales(
+        CREATE TABLE IF NOT EXISTS sales (
             id SERIAL PRIMARY KEY,
             vendor TEXT,
             product TEXT,
@@ -86,16 +88,19 @@ def index():
     # ---------- POST ----------
     if request.method == "POST":
 
+        # vendor master
         if request.form.get("new_vendor"):
             cur.execute("INSERT INTO vendor(name) VALUES(%s)", (request.form["new_vendor"],))
             conn.commit()
             return redirect("/")
 
+        # product master
         if request.form.get("new_product"):
             cur.execute("INSERT INTO product(name) VALUES(%s)", (request.form["new_product"],))
             conn.commit()
             return redirect("/")
 
+        # rate master
         if request.form.get("rate_product"):
             cur.execute(
                 "INSERT INTO rate_master(product,rate) VALUES(%s,%s)",
@@ -104,16 +109,12 @@ def index():
             conn.commit()
             return redirect("/")
 
-        if request.form.get("delete_id"):
-            cur.execute("DELETE FROM sales WHERE id=%s", (request.form["delete_id"],))
-            conn.commit()
-            return redirect("/")
-
+        # update payment
         if request.form.get("pay_id"):
             cur.execute("SELECT pending FROM sales WHERE id=%s", (request.form["pay_id"],))
-            old = cur.fetchone()[0]
+            old_pending = cur.fetchone()[0]
             received = Decimal(request.form["received"])
-            new_pending = old - received
+            new_pending = old_pending - received
             status = "Cleared" if new_pending <= 0 else "Pending"
 
             cur.execute("""
@@ -122,11 +123,11 @@ def index():
                     pending = %s,
                     status = %s
                 WHERE id = %s
-            """, (received, max(new_pending,0), status, request.form["pay_id"]))
+            """, (received, max(new_pending, 0), status, request.form["pay_id"]))
             conn.commit()
             return redirect("/")
 
-        # SALE ENTRY
+        # purchase entry
         cur.execute(
             "SELECT rate FROM rate_master WHERE product=%s",
             (request.form["product"],)
@@ -165,16 +166,19 @@ def index():
     if fv:
         where += " AND vendor=%s"
         params.append(fv)
+
     if fd and td:
         where += " AND sale_date BETWEEN %s AND %s"
         params.extend([fd, td])
 
+    # ---------- DASHBOARD CARDS ----------
     cur.execute(
         "SELECT COALESCE(SUM(total),0), COALESCE(SUM(paid),0), COALESCE(SUM(pending),0) FROM sales " + where,
         params
     )
     total_amt, received_amt, pending_amt = cur.fetchone()
 
+    # ---------- FETCH DATA ----------
     cur.execute("SELECT * FROM sales " + where + " ORDER BY id DESC", params)
     sales = cur.fetchall()
 
