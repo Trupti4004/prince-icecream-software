@@ -1,7 +1,6 @@
 from flask import Flask, render_template, request, redirect, session
 import psycopg2, os
 from decimal import Decimal
-import json
 
 app = Flask(__name__)
 app.secret_key = "prince_icecream_secret"
@@ -16,7 +15,7 @@ def login():
     cur = conn.cursor()
 
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS users(
+        CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
             username TEXT,
             password TEXT
@@ -27,7 +26,7 @@ def login():
     cur.execute("SELECT COUNT(*) FROM users")
     if cur.fetchone()[0] == 0:
         cur.execute(
-            "INSERT INTO users(username,password) VALUES(%s,%s)",
+            "INSERT INTO users (username,password) VALUES (%s,%s)",
             ("admin","admin123")
         )
         conn.commit()
@@ -61,101 +60,146 @@ def index():
 
     # ---------- TABLES ----------
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS vendor(
+        CREATE TABLE IF NOT EXISTS vendor (
             id SERIAL PRIMARY KEY,
             name TEXT
         )
     """)
 
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS product(
+        CREATE TABLE IF NOT EXISTS product (
             id SERIAL PRIMARY KEY,
-            name TEXT,
+            name TEXT
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS rate_master (
+            id SERIAL PRIMARY KEY,
+            product TEXT,
             rate NUMERIC
         )
     """)
 
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS purchase(
+        CREATE TABLE IF NOT EXISTS purchase (
             id SERIAL PRIMARY KEY,
             vendor TEXT,
-            purchase_date DATE,
-            total_amount NUMERIC
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS purchase_item(
-            id SERIAL PRIMARY KEY,
-            purchase_id INTEGER,
             product TEXT,
             quantity NUMERIC,
             rate NUMERIC,
-            amount NUMERIC
+            purchase_date DATE
         )
     """)
     conn.commit()
 
     # ---------- POST ----------
-    if request.method == "POST" and request.form.get("items_json"):
-        items = json.loads(request.form["items_json"])
-        vendor = request.form["vendor"]
-        date = request.form["date"]
+    if request.method == "POST":
 
-        total = sum(Decimal(i["amount"]) for i in items)
+        # ADD VENDOR
+        if request.form.get("new_vendor"):
+            cur.execute("INSERT INTO vendor(name) VALUES(%s)",
+                        (request.form["new_vendor"],))
+            conn.commit()
+            return redirect("/")
+
+        # DELETE VENDOR
+        if request.form.get("delete_vendor_id"):
+            cur.execute("DELETE FROM vendor WHERE id=%s",
+                        (request.form["delete_vendor_id"],))
+            conn.commit()
+            return redirect("/")
+
+        # ADD PRODUCT
+        if request.form.get("new_product"):
+            cur.execute("INSERT INTO product(name) VALUES(%s)",
+                        (request.form["new_product"],))
+            conn.commit()
+            return redirect("/")
+
+        # DELETE PRODUCT
+        if request.form.get("delete_product_id"):
+            cur.execute("DELETE FROM product WHERE id=%s",
+                        (request.form["delete_product_id"],))
+            conn.commit()
+            return redirect("/")
+
+        # ADD RATE
+        if request.form.get("rate_product"):
+            cur.execute("""
+                INSERT INTO rate_master(product,rate)
+                VALUES(%s,%s)
+            """, (
+                request.form["rate_product"],
+                Decimal(request.form["rate"])
+            ))
+            conn.commit()
+            return redirect("/")
+
+        # DELETE RATE
+        if request.form.get("delete_rate_id"):
+            cur.execute("DELETE FROM rate_master WHERE id=%s",
+                        (request.form["delete_rate_id"],))
+            conn.commit()
+            return redirect("/")
+
+        # ADD PURCHASE ENTRY
+        cur.execute(
+            "SELECT rate FROM rate_master WHERE product=%s",
+            (request.form["product"],)
+        )
+        rate = cur.fetchone()[0]
 
         cur.execute("""
-            INSERT INTO purchase(vendor,purchase_date,total_amount)
-            VALUES(%s,%s,%s) RETURNING id
-        """, (vendor, date, total))
-        purchase_id = cur.fetchone()[0]
-
-        for i in items:
-            cur.execute("""
-                INSERT INTO purchase_item
-                (purchase_id,product,quantity,rate,amount)
-                VALUES(%s,%s,%s,%s,%s)
-            """, (
-                purchase_id,
-                i["product"],
-                i["quantity"],
-                i["rate"],
-                i["amount"]
-            ))
-
+            INSERT INTO purchase
+            (vendor,product,quantity,rate,purchase_date)
+            VALUES(%s,%s,%s,%s,%s)
+        """, (
+            request.form["vendor"],
+            request.form["product"],
+            Decimal(request.form["quantity"]),
+            rate,
+            request.form["date"]
+        ))
         conn.commit()
         return redirect("/")
 
+    # ---------- FILTER ----------
+    filter_vendor = request.args.get("filter_vendor")
+    from_date = request.args.get("from_date")
+    to_date = request.args.get("to_date")
+
+    base = "FROM purchase WHERE 1=1"
+    params = []
+
+    if filter_vendor:
+        base += " AND vendor=%s"
+        params.append(filter_vendor)
+
+    if from_date and to_date:
+        base += " AND purchase_date BETWEEN %s AND %s"
+        params.extend([from_date, to_date])
+
+    # ---------- CARDS ----------
+    cur.execute("SELECT COALESCE(SUM(quantity),0) " + base, params)
+    total_sold = cur.fetchone()[0]
+
+    cur.execute("""
+        SELECT product, COALESCE(SUM(quantity),0)
+        """ + base + " GROUP BY product", params)
+    product_sales = cur.fetchall()
+
     # ---------- FETCH ----------
-    cur.execute("SELECT name FROM vendor")
+    cur.execute("SELECT id,name FROM vendor")
     vendors = cur.fetchall()
 
-    cur.execute("SELECT name, rate FROM product")
+    cur.execute("SELECT id,name FROM product")
     products = cur.fetchall()
 
-    # ✅ SAFE QUERY (NO INTERNAL ERROR)
-    cur.execute("""
-        SELECT
-            p.id,
-            p.vendor,
-            p.purchase_date,
-            p.total_amount,
-            COALESCE(
-                json_agg(
-                    json_build_object(
-                        'product', pi.product,
-                        'quantity', pi.quantity,
-                        'rate', pi.rate,
-                        'amount', pi.amount
-                    )
-                ) FILTER (WHERE pi.id IS NOT NULL),
-                '[]'
-            )
-        FROM purchase p
-        LEFT JOIN purchase_item pi ON p.id = pi.purchase_id
-        GROUP BY p.id
-        ORDER BY p.id DESC
-    """)
+    cur.execute("SELECT id,product,rate FROM rate_master")
+    rates = cur.fetchall()
+
+    cur.execute("SELECT * " + base + " ORDER BY id DESC", params)
     purchases = cur.fetchall()
 
     conn.close()
@@ -164,7 +208,10 @@ def index():
         "index.html",
         vendors=vendors,
         products=products,
-        purchases=purchases
+        rates=rates,
+        purchases=purchases,
+        total_sold=total_sold,
+        product_sales=product_sales
     )
 
 if __name__ == "__main__":
