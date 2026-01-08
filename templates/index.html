@@ -12,7 +12,7 @@
         <a href="/logout" class="logout">Logout</a>
     </h1>
 
-    <!-- DASHBOARD CARDS -->
+    <!-- ================= DASHBOARD CARDS ================= -->
     <div class="cards">
         <div class="card blue">
             <h3>Total Amount</h3>
@@ -30,7 +30,7 @@
         </div>
     </div>
 
-    <!-- FILTER -->
+    <!-- ================= FILTER ================= -->
     <div class="section">
         <h2>Filter</h2>
         <form method="get">
@@ -48,7 +48,68 @@
         </form>
     </div>
 
-    <!-- SALES TABLE -->
+    <!-- ================= MASTERS ================= -->
+    <div class="cards">
+
+        <!-- Vendor Master -->
+        <div class="card">
+            <h3>Vendor Master</h3>
+            <form method="post">
+                <input name="new_vendor" placeholder="Vendor name" required>
+                <button>Add</button>
+            </form>
+        </div>
+
+        <!-- Product Master -->
+        <div class="card">
+            <h3>Product Master</h3>
+            <form method="post">
+                <input name="new_product" placeholder="Product name" required>
+                <button>Add</button>
+            </form>
+        </div>
+
+        <!-- Rate Master -->
+        <div class="card">
+            <h3>Rate Master</h3>
+            <form method="post">
+                <select name="rate_product">
+                    {% for p in products %}
+                    <option>{{ p[0] }}</option>
+                    {% endfor %}
+                </select>
+                <input name="rate" placeholder="Rate" required>
+                <button>Add</button>
+            </form>
+        </div>
+
+    </div>
+
+    <!-- ================= PURCHASE ENTRY ================= -->
+    <div class="section">
+        <h2>Vendor Product Entry</h2>
+        <form method="post">
+            <select name="vendor" required>
+                {% for v in vendors %}
+                <option>{{ v[0] }}</option>
+                {% endfor %}
+            </select>
+
+            <select name="product" required>
+                {% for p in products %}
+                <option>{{ p[0] }}</option>
+                {% endfor %}
+            </select>
+
+            <input name="quantity" placeholder="Quantity" required>
+            <input name="paid" placeholder="Paid Amount" value="0">
+            <input type="date" name="date" required>
+
+            <button type="submit">Save Entry</button>
+        </form>
+    </div>
+
+    <!-- ================= SALES TABLE ================= -->
     <div class="section">
         <h2>Vendor-wise Product Sales</h2>
 
