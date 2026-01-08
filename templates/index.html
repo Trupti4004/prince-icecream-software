@@ -31,13 +31,23 @@
     </div>
 </div>
 
-<!-- MASTER -->
+<!-- ICE CREAM TYPE ANALYSIS -->
+<div class="flex">
+    {% for t in type_sales %}
+    <div class="card">
+        <h3>{{ t[0] }} Sold</h3>
+        <h2>{{ t[1] }} Units</h2>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- MASTERS -->
 <div class="flex">
     <div class="card">
         <h3>Add Vendor</h3>
         <form method="post">
             <input name="new_vendor" placeholder="Vendor Name" required>
-            <button>Add Vendor</button>
+            <button>Add</button>
         </form>
     </div>
 
@@ -45,7 +55,15 @@
         <h3>Add Product</h3>
         <form method="post">
             <input name="new_product" placeholder="Product Name" required>
-            <button>Add Product</button>
+            <button>Add</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Add Ice Cream Type</h3>
+        <form method="post">
+            <input name="new_type" placeholder="Type (Vanilla, Mango)" required>
+            <button>Add</button>
         </form>
     </div>
 </div>
@@ -54,6 +72,7 @@
 <div class="card">
     <h3>Purchase Entry</h3>
     <form method="post">
+
         <select name="vendor" required>
             {% for v in vendors %}
             <option>{{ v[0] }}</option>
@@ -66,9 +85,17 @@
             {% endfor %}
         </select>
 
+        <select name="ice_cream_type" required>
+            {% for t in types %}
+            <option>{{ t[0] }}</option>
+            {% endfor %}
+        </select>
+
+        <input type="number" name="quantity" placeholder="Quantity Sold" required>
         <input type="date" name="date" required>
         <input name="total" placeholder="Total Amount" required>
         <input name="advance" placeholder="Advance" required>
+
         <button>Save Entry</button>
     </form>
 </div>
@@ -87,7 +114,7 @@
         <input type="date" name="from_date">
         <input type="date" name="to_date">
 
-        <button type="submit">Apply Filter</button>
+        <button type="submit">Apply</button>
     </form>
 </div>
 
@@ -98,6 +125,8 @@
         <tr>
             <th>Vendor</th>
             <th>Product</th>
+            <th>Type</th>
+            <th>Qty</th>
             <th>Date</th>
             <th>Total</th>
             <th>Advance</th>
@@ -112,18 +141,15 @@
             <td>{{ r[1] }}</td>
             <td>{{ r[2] }}</td>
             <td>{{ r[3] }}</td>
-            <td>₹ {{ r[4] }}</td>
-            <td>₹ {{ r[5] }}</td>
+            <td>{{ r[4] }}</td>
+            <td>{{ r[5] }}</td>
             <td>₹ {{ r[6] }}</td>
+            <td>₹ {{ r[7] }}</td>
+            <td>₹ {{ r[8] }}</td>
+            <td>{{ r[9] }}</td>
+
             <td>
-                {% if r[7] == "Pending" %}
-                <span class="status-pending">Pending</span>
-                {% else %}
-                <span class="status-cleared">Cleared</span>
-                {% endif %}
-            </td>
-            <td>
-                {% if r[7] == "Pending" %}
+                {% if r[9] == "Pending" %}
                 <form method="post">
                     <input type="hidden" name="pay_id" value="{{ r[0] }}">
                     <input name="received" placeholder="Amount" required>
@@ -131,8 +157,9 @@
                 </form>
                 {% else %}✔{% endif %}
             </td>
+
             <td>
-                <form method="post" onsubmit="return confirm('Delete entry?');">
+                <form method="post">
                     <input type="hidden" name="delete_id" value="{{ r[0] }}">
                     <button style="background:#c0392b;">Delete</button>
                 </form>
@@ -142,10 +169,6 @@
     </table>
 </div>
 
-</div>
-
-<div class="footer">
-    © Prince Ice Cream ERP
 </div>
 
 </body>
