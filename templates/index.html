@@ -3,7 +3,61 @@
 <head>
     <title>Prince Ice Cream ERP</title>
     <link rel="stylesheet" href="/static/style.css">
+    <script>
+        let items = [];
+
+        function addItem() {
+            const productSelect = document.getElementById("product");
+            const product = productSelect.value;
+            const rate = parseFloat(productSelect.selectedOptions[0].dataset.rate);
+            const qty = parseFloat(document.getElementById("quantity").value);
+
+            if (!product || !qty) {
+                alert("Select product and quantity");
+                return;
+            }
+
+            const amount = qty * rate;
+
+            items.push({
+                product: product,
+                quantity: qty,
+                rate: rate,
+                amount: amount
+            });
+
+            renderTable();
+        }
+
+        function renderTable() {
+            let table = document.getElementById("itemsTable");
+            table.innerHTML = "";
+            let total = 0;
+
+            items.forEach((i, index) => {
+                total += i.amount;
+                table.innerHTML += `
+                    <tr>
+                        <td>${i.product}</td>
+                        <td>${i.quantity}</td>
+                        <td>${i.rate}</td>
+                        <td>${i.amount}</td>
+                        <td><button type="button" onclick="removeItem(${index})">X</button></td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById("totalAmount").innerText = total;
+            document.getElementById("items_json").value = JSON.stringify(items);
+        }
+
+        function removeItem(index) {
+            items.splice(index, 1);
+            renderTable();
+        }
+    </script>
 </head>
+
 <body>
 
 <header>
@@ -15,106 +69,88 @@
 
 <div class="container">
 
-<!-- DASHBOARD -->
-<div class="flex">
-    <div class="card">
-        <h3>Total Ice Cream Sold</h3>
-        <h2>{{ total_sold }} Units</h2>
-    </div>
-
-    {% for p in product_sales %}
-    <div class="card">
-        <h3>{{ p[0] }} Sold</h3>
-        <h2>{{ p[1] }} Units</h2>
-    </div>
-    {% endfor %}
-</div>
-
-<!-- VENDOR MASTER -->
-<div class="card">
-    <h3>Vendor Master</h3>
-    <form method="post">
-        <input name="new_vendor" placeholder="Vendor Name" required>
-        <button>Add Vendor</button>
-    </form>
-
-    <form method="post">
-        <select name="delete_vendor">
-            {% for v in vendors %}
-            <option>{{ v[0] }}</option>
-            {% endfor %}
-        </select>
-        <button style="background:#c0392b;">Delete Vendor</button>
-    </form>
-</div>
-
-<!-- PRODUCT MASTER -->
-<div class="card">
-    <h3>Product Master (Ice Cream Type)</h3>
-    <form method="post">
-        <input name="new_product" placeholder="Product Name" required>
-        <input name="rate" placeholder="Rate per unit" required>
-        <button>Add Product</button>
-    </form>
-
-    <form method="post">
-        <select name="delete_product">
-            {% for p in products %}
-            <option>{{ p[0] }}</option>
-            {% endfor %}
-        </select>
-        <button style="background:#c0392b;">Delete Product</button>
-    </form>
-</div>
-
 <!-- PURCHASE ENTRY -->
 <div class="card">
-    <h3>Purchase Entry</h3>
-    <form method="post">
+    <h3>Create Bill (Multiple Products)</h3>
 
+    <form method="post">
+        <label>Vendor</label>
         <select name="vendor" required>
             {% for v in vendors %}
             <option>{{ v[0] }}</option>
             {% endfor %}
         </select>
 
-        <select name="product" required>
+        <label>Date</label>
+        <input type="date" name="date" required>
+
+        <hr>
+
+        <label>Product</label>
+        <select id="product">
             {% for p in products %}
-            <option value="{{ p[0] }}" data-rate="{{ p[1] }}">{{ p[0] }}</option>
+            <option value="{{ p[0] }}" data-rate="{{ p[1] }}">
+                {{ p[0] }} (₹{{ p[1] }})
+            </option>
             {% endfor %}
         </select>
 
-        <input name="quantity" placeholder="Quantity" required>
-        <input name="rate" placeholder="Rate" required>
-        <input type="date" name="date" required>
+        <label>Quantity</label>
+        <input id="quantity" placeholder="Quantity">
 
-        <button>Save Entry</button>
+        <button type="button" onclick="addItem()">➕ Add Product</button>
+
+        <hr>
+
+        <table border="1" width="100%">
+            <thead>
+                <tr>
+                    <th>Product</th>
+                    <th>Qty</th>
+                    <th>Rate</th>
+                    <th>Amount</th>
+                    <th>Remove</th>
+                </tr>
+            </thead>
+            <tbody id="itemsTable"></tbody>
+        </table>
+
+        <h3>Total: ₹ <span id="totalAmount">0</span></h3>
+
+        <input type="hidden" name="items_json" id="items_json">
+
+        <button type="submit">💾 Save Bill</button>
     </form>
 </div>
 
-<!-- RECORDS -->
+<!-- BILL RECORDS -->
 <div class="card">
-    <h3>Purchase Records</h3>
-    <table>
-        <tr>
-            <th>Vendor</th>
-            <th>Product</th>
-            <th>Qty</th>
-            <th>Rate</th>
-            <th>Amount</th>
-            <th>Date</th>
-        </tr>
-        {% for r in purchases %}
-        <tr>
-            <td>{{ r[1] }}</td>
-            <td>{{ r[2] }}</td>
-            <td>{{ r[3] }}</td>
-            <td>{{ r[4] }}</td>
-            <td>{{ r[5] }}</td>
-            <td>{{ r[6] }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+    <h3>Saved Bills</h3>
+
+    {% for p in purchases %}
+    <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
+        <b>Vendor:</b> {{ p[1] }} <br>
+        <b>Date:</b> {{ p[2] }} <br>
+        <b>Total:</b> ₹ {{ p[3] }}
+
+        <table width="100%" border="1">
+            <tr>
+                <th>Product</th>
+                <th>Qty</th>
+                <th>Rate</th>
+                <th>Amount</th>
+            </tr>
+            {% for item in p[4] %}
+            <tr>
+                <td>{{ item.product }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>{{ item.rate }}</td>
+                <td>{{ item.amount }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endfor %}
 </div>
 
 </div>
