@@ -1,153 +1,43 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Prince Ice Cream – Vendor Sales</title>
+    <title>Prince Ice Cream | Vendor Sales</title>
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
 
-<header>
-    🍦 Prince Ice Cream – Vendor Wise Product Sales
-    <a href="/logout" style="float:right;color:white;">Logout</a>
-</header>
+<h1>🍦 Prince Ice Cream – Vendor Sales Dashboard</h1>
 
-<div class="container">
-
-<!-- FILTER -->
-<div class="card">
-    <form method="get">
-        <select name="filter_vendor">
-            <option value="">All Vendors</option>
-            {% for v in vendors %}
-            <option value="{{ v[1] }}">{{ v[1] }}</option>
-            {% endfor %}
-        </select>
-        <input type="date" name="from_date">
-        <input type="date" name="to_date">
-        <button>Apply Filter</button>
-    </form>
+<div class="cards">
+    <div class="card blue">Total ₹ {{ total_amt }}</div>
+    <div class="card green">Received ₹ {{ received_amt }}</div>
+    <div class="card red">Pending ₹ {{ pending_amt }}</div>
 </div>
 
-<!-- CARDS -->
-<div class="flex">
-    <div class="card">
-        <h3>Total Sold</h3>
-        <h2>{{ total_sold }}</h2>
-    </div>
-
-    {% for p in product_sales %}
-    <div class="card">
-        <h3>{{ p[0] }} Sold</h3>
-        <h2>{{ p[1] }}</h2>
-    </div>
-    {% endfor %}
+<h2>Monthly Product Sales</h2>
+<div class="cards">
+{% for p in product_qty %}
+<div class="card">{{ p[0] }} : {{ p[1] }}</div>
+{% endfor %}
 </div>
 
-<!-- MASTERS -->
-<div class="flex">
+<h2>Vendor-wise Sales</h2>
+{% for s in sales %}
+<div class="vendor-card">
+<b>{{ s[1] }}</b><br>
+Product: {{ s[2] }} | Qty: {{ s[3] }}<br>
+Total: ₹{{ s[5] }} | Paid: ₹{{ s[6] }} | Pending: ₹{{ s[7] }}<br>
+Status: <b>{{ s[9] }}</b>
 
-<div class="card">
-<h3>Vendor Master</h3>
+{% if s[9] == "Pending" %}
 <form method="post">
-<input name="new_vendor" placeholder="Vendor name" required>
-<button>Add</button>
+<input type="hidden" name="pay_id" value="{{ s[0] }}">
+<input name="received" placeholder="Pay amount">
+<button>Update</button>
 </form>
-<ul>
-{% for v in vendors %}
-<li>{{ v[1] }}
-<form method="post" style="display:inline;">
-<input type="hidden" name="delete_vendor_id" value="{{ v[0] }}">
-<button>❌</button>
-</form>
-</li>
-{% endfor %}
-</ul>
+{% endif %}
 </div>
-
-<div class="card">
-<h3>Product Master</h3>
-<form method="post">
-<input name="new_product" placeholder="Product name" required>
-<button>Add</button>
-</form>
-<ul>
-{% for p in products %}
-<li>{{ p[1] }}
-<form method="post" style="display:inline;">
-<input type="hidden" name="delete_product_id" value="{{ p[0] }}">
-<button>❌</button>
-</form>
-</li>
 {% endfor %}
-</ul>
-</div>
 
-<div class="card">
-<h3>Rate Master</h3>
-<form method="post">
-<select name="rate_product">
-{% for p in products %}
-<option>{{ p[1] }}</option>
-{% endfor %}
-</select>
-<input name="rate" placeholder="Rate" required>
-<button>Add</button>
-</form>
-<ul>
-{% for r in rates %}
-<li>{{ r[1] }} – ₹{{ r[2] }}
-<form method="post" style="display:inline;">
-<input type="hidden" name="delete_rate_id" value="{{ r[0] }}">
-<button>❌</button>
-</form>
-</li>
-{% endfor %}
-</ul>
-</div>
-
-</div>
-
-<!-- PURCHASE ENTRY -->
-<div class="card">
-<h3>Vendor Product Entry</h3>
-<form method="post">
-<select name="vendor" required>
-{% for v in vendors %}
-<option>{{ v[1] }}</option>
-{% endfor %}
-</select>
-
-<select name="product" required>
-{% for p in products %}
-<option>{{ p[1] }}</option>
-{% endfor %}
-</select>
-
-<input name="quantity" placeholder="Quantity" required>
-<input type="date" name="date" required>
-<button>Save</button>
-</form>
-</div>
-
-<!-- RECORDS -->
-<div class="card">
-<h3>Records</h3>
-<table>
-<tr>
-<th>Vendor</th><th>Product</th><th>Qty</th><th>Rate</th><th>Date</th>
-</tr>
-{% for r in purchases %}
-<tr>
-<td>{{ r[1] }}</td>
-<td>{{ r[2] }}</td>
-<td>{{ r[3] }}</td>
-<td>{{ r[4] }}</td>
-<td>{{ r[5] }}</td>
-</tr>
-{% endfor %}
-</table>
-</div>
-
-</div>
 </body>
 </html>
