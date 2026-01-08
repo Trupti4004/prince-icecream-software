@@ -7,9 +7,9 @@
 <body>
 
 <header>
-    🍦 Prince Ice Cream – Wholesale ERP
-    <span style="float:right;">
-        <a href="/logout" style="color:white;">Logout</a>
+    🍦 Prince Ice Cream ERP
+    <span style="float:right">
+        <a href="/logout" style="color:white">Logout</a>
     </span>
 </header>
 
@@ -18,54 +18,53 @@
 <!-- DASHBOARD -->
 <div class="flex">
     <div class="card">
-        <h3>Total Sales (This Month)</h3>
-        <h2>₹ {{ total }}</h2>
+        <h3>Total Ice Cream Sold</h3>
+        <h2>{{ total_sold }} Units</h2>
     </div>
-    <div class="card">
-        <h3>Received</h3>
-        <h2>₹ {{ received }}</h2>
-    </div>
-    <div class="card">
-        <h3>Pending</h3>
-        <h2>₹ {{ pending }}</h2>
-    </div>
-</div>
 
-<!-- ICE CREAM TYPE ANALYSIS -->
-<div class="flex">
-    {% for t in type_sales %}
+    {% for p in product_sales %}
     <div class="card">
-        <h3>{{ t[0] }} Sold</h3>
-        <h2>{{ t[1] }} Units</h2>
+        <h3>{{ p[0] }} Sold</h3>
+        <h2>{{ p[1] }} Units</h2>
     </div>
     {% endfor %}
 </div>
 
-<!-- MASTERS -->
-<div class="flex">
-    <div class="card">
-        <h3>Add Vendor</h3>
-        <form method="post">
-            <input name="new_vendor" placeholder="Vendor Name" required>
-            <button>Add</button>
-        </form>
-    </div>
+<!-- VENDOR MASTER -->
+<div class="card">
+    <h3>Vendor Master</h3>
+    <form method="post">
+        <input name="new_vendor" placeholder="Vendor Name" required>
+        <button>Add Vendor</button>
+    </form>
 
-    <div class="card">
-        <h3>Add Product</h3>
-        <form method="post">
-            <input name="new_product" placeholder="Product Name" required>
-            <button>Add</button>
-        </form>
-    </div>
+    <form method="post">
+        <select name="delete_vendor">
+            {% for v in vendors %}
+            <option>{{ v[0] }}</option>
+            {% endfor %}
+        </select>
+        <button style="background:#c0392b;">Delete Vendor</button>
+    </form>
+</div>
 
-    <div class="card">
-        <h3>Add Ice Cream Type</h3>
-        <form method="post">
-            <input name="new_type" placeholder="Type (Vanilla, Mango)" required>
-            <button>Add</button>
-        </form>
-    </div>
+<!-- PRODUCT MASTER -->
+<div class="card">
+    <h3>Product Master (Ice Cream Type)</h3>
+    <form method="post">
+        <input name="new_product" placeholder="Product Name" required>
+        <input name="rate" placeholder="Rate per unit" required>
+        <button>Add Product</button>
+    </form>
+
+    <form method="post">
+        <select name="delete_product">
+            {% for p in products %}
+            <option>{{ p[0] }}</option>
+            {% endfor %}
+        </select>
+        <button style="background:#c0392b;">Delete Product</button>
+    </form>
 </div>
 
 <!-- PURCHASE ENTRY -->
@@ -81,40 +80,15 @@
 
         <select name="product" required>
             {% for p in products %}
-            <option>{{ p[0] }}</option>
+            <option value="{{ p[0] }}" data-rate="{{ p[1] }}">{{ p[0] }}</option>
             {% endfor %}
         </select>
 
-        <select name="ice_cream_type" required>
-            {% for t in types %}
-            <option>{{ t[0] }}</option>
-            {% endfor %}
-        </select>
-
-        <input type="number" name="quantity" placeholder="Quantity Sold" required>
+        <input name="quantity" placeholder="Quantity" required>
+        <input name="rate" placeholder="Rate" required>
         <input type="date" name="date" required>
-        <input name="total" placeholder="Total Amount" required>
-        <input name="advance" placeholder="Advance" required>
 
         <button>Save Entry</button>
-    </form>
-</div>
-
-<!-- FILTER -->
-<div class="card">
-    <h3>Filter Records</h3>
-    <form method="get" class="flex">
-        <select name="filter_vendor">
-            <option value="">All Vendors</option>
-            {% for v in vendors %}
-            <option value="{{ v[0] }}">{{ v[0] }}</option>
-            {% endfor %}
-        </select>
-
-        <input type="date" name="from_date">
-        <input type="date" name="to_date">
-
-        <button type="submit">Apply</button>
     </form>
 </div>
 
@@ -125,17 +99,11 @@
         <tr>
             <th>Vendor</th>
             <th>Product</th>
-            <th>Type</th>
             <th>Qty</th>
+            <th>Rate</th>
+            <th>Amount</th>
             <th>Date</th>
-            <th>Total</th>
-            <th>Advance</th>
-            <th>Pending</th>
-            <th>Status</th>
-            <th>Payment</th>
-            <th>Delete</th>
         </tr>
-
         {% for r in purchases %}
         <tr>
             <td>{{ r[1] }}</td>
@@ -143,27 +111,7 @@
             <td>{{ r[3] }}</td>
             <td>{{ r[4] }}</td>
             <td>{{ r[5] }}</td>
-            <td>₹ {{ r[6] }}</td>
-            <td>₹ {{ r[7] }}</td>
-            <td>₹ {{ r[8] }}</td>
-            <td>{{ r[9] }}</td>
-
-            <td>
-                {% if r[9] == "Pending" %}
-                <form method="post">
-                    <input type="hidden" name="pay_id" value="{{ r[0] }}">
-                    <input name="received" placeholder="Amount" required>
-                    <button>Update</button>
-                </form>
-                {% else %}✔{% endif %}
-            </td>
-
-            <td>
-                <form method="post">
-                    <input type="hidden" name="delete_id" value="{{ r[0] }}">
-                    <button style="background:#c0392b;">Delete</button>
-                </form>
-            </td>
+            <td>{{ r[6] }}</td>
         </tr>
         {% endfor %}
     </table>
