@@ -6,7 +6,10 @@ app = Flask(__name__)
 app.secret_key = "prince_icecream_secret"
 
 def get_db():
-    return psycopg2.connect(os.environ["DATABASE_URL"], sslmode="require")
+    return psycopg2.connect(
+        os.environ["DATABASE_URL"],
+        sslmode="require"
+    )
 
 # ---------------- LOGIN ----------------
 @app.route("/login", methods=["GET", "POST"])
@@ -14,6 +17,7 @@ def login():
     conn = get_db()
     cur = conn.cursor()
 
+    # USERS TABLE
     cur.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id SERIAL PRIMARY KEY,
@@ -23,10 +27,11 @@ def login():
     """)
     conn.commit()
 
+    # DEFAULT USER
     cur.execute("SELECT COUNT(*) FROM users")
     if cur.fetchone()[0] == 0:
         cur.execute(
-            "INSERT INTO users (username,password) VALUES (%s,%s)",
+            "INSERT INTO users (username, password) VALUES (%s, %s)",
             ("admin", "admin123")
         )
         conn.commit()
@@ -58,7 +63,7 @@ def index():
     conn = get_db()
     cur = conn.cursor()
 
-    # ---------- TABLES ----------
+    # ---------- TABLE CREATION ----------
     cur.execute("""
         CREATE TABLE IF NOT EXISTS vendor (
             id SERIAL PRIMARY KEY,
@@ -69,8 +74,7 @@ def index():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS product (
             id SERIAL PRIMARY KEY,
-            name TEXT,
-            rate NUMERIC
+            name TEXT
         )
     """)
 
@@ -78,36 +82,44 @@ def index():
         CREATE TABLE IF NOT EXISTS purchase (
             id SERIAL PRIMARY KEY,
             vendor TEXT,
-            product TEXT,
-            quantity NUMERIC,
-            rate NUMERIC,
-            amount NUMERIC,
-            purchase_date DATE
+            product TEXT
         )
     """)
     conn.commit()
 
-    # ---------- POST ----------
+    # ---------- SAFE MIGRATIONS (VERY IMPORTANT) ----------
+    cur.execute("ALTER TABLE product ADD COLUMN IF NOT EXISTS rate NUMERIC")
+    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS quantity NUMERIC")
+    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS rate NUMERIC")
+    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS amount NUMERIC")
+    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS purchase_date DATE")
+    conn.commit()
+
+    # ---------- POST ACTIONS ----------
     if request.method == "POST":
 
         # ADD VENDOR
         if request.form.get("new_vendor"):
-            cur.execute("INSERT INTO vendor(name) VALUES(%s)",
-                        (request.form["new_vendor"],))
+            cur.execute(
+                "INSERT INTO vendor (name) VALUES (%s)",
+                (request.form["new_vendor"],)
+            )
             conn.commit()
             return redirect("/")
 
         # DELETE VENDOR
         if request.form.get("delete_vendor"):
-            cur.execute("DELETE FROM vendor WHERE name=%s",
-                        (request.form["delete_vendor"],))
+            cur.execute(
+                "DELETE FROM vendor WHERE name=%s",
+                (request.form["delete_vendor"],)
+            )
             conn.commit()
             return redirect("/")
 
         # ADD PRODUCT
         if request.form.get("new_product"):
             cur.execute(
-                "INSERT INTO product(name,rate) VALUES(%s,%s)",
+                "INSERT INTO product (name, rate) VALUES (%s, %s)",
                 (request.form["new_product"], Decimal(request.form["rate"]))
             )
             conn.commit()
@@ -115,12 +127,14 @@ def index():
 
         # DELETE PRODUCT
         if request.form.get("delete_product"):
-            cur.execute("DELETE FROM product WHERE name=%s",
-                        (request.form["delete_product"],))
+            cur.execute(
+                "DELETE FROM product WHERE name=%s",
+                (request.form["delete_product"],)
+            )
             conn.commit()
             return redirect("/")
 
-        # ADD PURCHASE (one product at a time – multiple allowed)
+        # ADD PURCHASE (MULTIPLE PRODUCTS PER VENDOR ALLOWED)
         qty = Decimal(request.form["quantity"])
         rate = Decimal(request.form["rate"])
         amount = qty * rate
@@ -128,22 +142,24 @@ def index():
         cur.execute("""
             INSERT INTO purchase
             (vendor, product, quantity, rate, amount, purchase_date)
-            VALUES (%s,%s,%s,%s,%s,%s)
+            VALUES (%s, %s, %s, %s, %s, %s)
         """, (
             request.form["vendor"],
             request.form["product"],
-            qty, rate, amount,
+            qty,
+            rate,
+            amount,
             request.form["date"]
         ))
         conn.commit()
         return redirect("/")
 
     # ---------- DASHBOARD ----------
-    # Total quantity sold (ALL products)
+    # TOTAL SOLD (ALL PRODUCTS)
     cur.execute("SELECT COALESCE(SUM(quantity),0) FROM purchase")
     total_sold = cur.fetchone()[0]
 
-    # Product-wise quantity sold
+    # PRODUCT-WISE SOLD
     cur.execute("""
         SELECT product, COALESCE(SUM(quantity),0)
         FROM purchase
@@ -151,7 +167,7 @@ def index():
     """)
     product_sales = cur.fetchall()
 
-    # ---------- FETCH ----------
+    # ---------- FETCH DATA ----------
     cur.execute("SELECT name FROM vendor")
     vendors = cur.fetchall()
 
