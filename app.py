@@ -1,15 +1,13 @@
 from flask import Flask, render_template, request, redirect, session
 import psycopg2, os
 from decimal import Decimal
+from datetime import date
 
 app = Flask(__name__)
 app.secret_key = "prince_icecream_secret"
 
 def get_db():
-    return psycopg2.connect(
-        os.environ["DATABASE_URL"],
-        sslmode="require"
-    )
+    return psycopg2.connect(os.environ["DATABASE_URL"], sslmode="require")
 
 # ---------------- LOGIN ----------------
 @app.route("/login", methods=["GET", "POST"])
@@ -26,10 +24,10 @@ def login():
     """)
     conn.commit()
 
-    cur.execute("SELECT COUNT(*) FROM users")
-    if cur.fetchone()[0] == 0:
+    cur.execute("SELECT * FROM users")
+    if not cur.fetchone():
         cur.execute(
-            "INSERT INTO users (username, password) VALUES (%s,%s)",
+            "INSERT INTO users (username,password) VALUES (%s,%s)",
             ("admin", "admin123")
         )
         conn.commit()
@@ -43,7 +41,6 @@ def login():
         )
         if cur.fetchone():
             session["user"] = u
-            conn.close()
             return redirect("/")
 
     conn.close()
@@ -54,7 +51,7 @@ def logout():
     session.clear()
     return redirect("/login")
 
-# ---------------- MAIN PAGE ----------------
+# ---------------- MAIN ----------------
 @app.route("/", methods=["GET", "POST"])
 def index():
     if "user" not in session:
@@ -64,61 +61,53 @@ def index():
     cur = conn.cursor()
 
     # ---------- TABLES ----------
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS vendor (
-            id SERIAL PRIMARY KEY,
-            name TEXT
-        )
-    """)
+    cur.execute("""CREATE TABLE IF NOT EXISTS vendor (
+        id SERIAL PRIMARY KEY, name TEXT)""")
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS product (
-            id SERIAL PRIMARY KEY,
-            name TEXT
-        )
-    """)
+    cur.execute("""CREATE TABLE IF NOT EXISTS product (
+        id SERIAL PRIMARY KEY, name TEXT)""")
 
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS purchase (
-            id SERIAL PRIMARY KEY,
-            vendor TEXT,
-            product TEXT,
-            purchase_date DATE
-        )
-    """)
+    cur.execute("""CREATE TABLE IF NOT EXISTS ice_cream_type (
+        id SERIAL PRIMARY KEY, name TEXT)""")
+
+    cur.execute("""CREATE TABLE IF NOT EXISTS purchase (
+        id SERIAL PRIMARY KEY,
+        vendor TEXT,
+        product TEXT,
+        ice_cream_type TEXT,
+        quantity NUMERIC,
+        purchase_date DATE,
+        total NUMERIC,
+        advance NUMERIC,
+        pending NUMERIC,
+        status TEXT
+    )""")
     conn.commit()
 
-    # ---------- SAFE MIGRATION ----------
-    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS total NUMERIC")
-    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS advance NUMERIC")
-    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS pending NUMERIC")
-    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS status TEXT")
-    conn.commit()
-
-    # ---------- POST ACTIONS ----------
+    # ---------- POST ----------
     if request.method == "POST":
 
         if request.form.get("new_vendor"):
-            cur.execute(
-                "INSERT INTO vendor(name) VALUES(%s)",
-                (request.form["new_vendor"],)
-            )
+            cur.execute("INSERT INTO vendor(name) VALUES(%s)",
+                        (request.form["new_vendor"],))
             conn.commit()
             return redirect("/")
 
         if request.form.get("new_product"):
-            cur.execute(
-                "INSERT INTO product(name) VALUES(%s)",
-                (request.form["new_product"],)
-            )
+            cur.execute("INSERT INTO product(name) VALUES(%s)",
+                        (request.form["new_product"],))
+            conn.commit()
+            return redirect("/")
+
+        if request.form.get("new_type"):
+            cur.execute("INSERT INTO ice_cream_type(name) VALUES(%s)",
+                        (request.form["new_type"],))
             conn.commit()
             return redirect("/")
 
         if request.form.get("delete_id"):
-            cur.execute(
-                "DELETE FROM purchase WHERE id=%s",
-                (request.form["delete_id"],)
-            )
+            cur.execute("DELETE FROM purchase WHERE id=%s",
+                        (request.form["delete_id"],))
             conn.commit()
             return redirect("/")
 
@@ -126,74 +115,83 @@ def index():
             pid = int(request.form["pay_id"])
             received = Decimal(request.form["received"])
             cur.execute("SELECT pending FROM purchase WHERE id=%s", (pid,))
-            old_pending = Decimal(cur.fetchone()[0] or 0)
-            new_pending = old_pending - received
-            status = "Cleared" if new_pending <= 0 else "Pending"
-            new_pending = max(new_pending, 0)
-
-            cur.execute(
-                "UPDATE purchase SET pending=%s, status=%s WHERE id=%s",
-                (new_pending, status, pid)
-            )
+            old = Decimal(cur.fetchone()[0])
+            new = old - received
+            status = "Cleared" if new <= 0 else "Pending"
+            new = max(new, 0)
+            cur.execute("""
+                UPDATE purchase SET pending=%s, status=%s WHERE id=%s
+            """, (new, status, pid))
             conn.commit()
             return redirect("/")
 
         # Purchase entry
         total = Decimal(request.form["total"])
-        advance = Decimal(request.form["advance"])
-        pending = total - advance
+        adv = Decimal(request.form["advance"])
+        qty = Decimal(request.form["quantity"])
+        pending = total - adv
         status = "Cleared" if pending <= 0 else "Pending"
 
         cur.execute("""
             INSERT INTO purchase
-            (vendor, product, purchase_date, total, advance, pending, status)
-            VALUES (%s,%s,%s,%s,%s,%s,%s)
+            (vendor, product, ice_cream_type, quantity,
+             purchase_date, total, advance, pending, status)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
         """, (
             request.form["vendor"],
             request.form["product"],
+            request.form["ice_cream_type"],
+            qty,
             request.form["date"],
-            total, advance, pending, status
+            total, adv, pending, status
         ))
         conn.commit()
         return redirect("/")
 
     # ---------- FILTER ----------
-    filter_vendor = request.args.get("filter_vendor")
-    from_date = request.args.get("from_date")
-    to_date = request.args.get("to_date")
+    fv = request.args.get("filter_vendor")
+    fd = request.args.get("from_date")
+    td = request.args.get("to_date")
 
-    query = "SELECT * FROM purchase WHERE 1=1"
-    params = []
+    q = "SELECT * FROM purchase WHERE 1=1"
+    p = []
 
-    if filter_vendor:
-        query += " AND vendor=%s"
-        params.append(filter_vendor)
-
-    if from_date and to_date:
-        query += " AND purchase_date BETWEEN %s AND %s"
-        params.extend([from_date, to_date])
+    if fv:
+        q += " AND vendor=%s"
+        p.append(fv)
+    if fd and td:
+        q += " AND purchase_date BETWEEN %s AND %s"
+        p.extend([fd, td])
 
     # ---------- DASHBOARD ----------
     cur.execute("""
-        SELECT
-            COALESCE(SUM(total),0),
-            COALESCE(SUM(advance),0),
-            COALESCE(SUM(pending),0)
+        SELECT COALESCE(SUM(total),0),
+               COALESCE(SUM(advance),0),
+               COALESCE(SUM(pending),0)
         FROM purchase
-        WHERE purchase_date IS NOT NULL
-          AND DATE_TRUNC('month', purchase_date)
+        WHERE DATE_TRUNC('month', purchase_date)
               = DATE_TRUNC('month', CURRENT_DATE)
     """)
-    total_sum, received_sum, pending_sum = cur.fetchone()
+    total, received, pending = cur.fetchone()
 
-    # ---------- FETCH DATA ----------
+    # Ice cream type analysis
+    cur.execute("""
+        SELECT ice_cream_type, SUM(quantity)
+        FROM purchase
+        GROUP BY ice_cream_type
+    """)
+    type_sales = cur.fetchall()
+
     cur.execute("SELECT name FROM vendor")
     vendors = cur.fetchall()
 
     cur.execute("SELECT name FROM product")
     products = cur.fetchall()
 
-    cur.execute(query + " ORDER BY id DESC", params)
+    cur.execute("SELECT name FROM ice_cream_type")
+    types = cur.fetchall()
+
+    cur.execute(q + " ORDER BY id DESC", p)
     purchases = cur.fetchall()
 
     conn.close()
@@ -202,10 +200,12 @@ def index():
         "index.html",
         vendors=vendors,
         products=products,
+        types=types,
         purchases=purchases,
-        total=total_sum,
-        received=received_sum,
-        pending=pending_sum
+        total=total,
+        received=received,
+        pending=pending,
+        type_sales=type_sales
     )
 
 if __name__ == "__main__":
