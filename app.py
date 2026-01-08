@@ -32,14 +32,12 @@ def login():
         conn.commit()
 
     if request.method == "POST":
-        u = request.form["username"]
-        p = request.form["password"]
         cur.execute(
             "SELECT * FROM users WHERE username=%s AND password=%s",
-            (u, p)
+            (request.form["username"], request.form["password"])
         )
         if cur.fetchone():
-            session["user"] = u
+            session["user"] = request.form["username"]
             conn.close()
             return redirect("/")
 
@@ -71,14 +69,8 @@ def index():
     cur.execute("""
         CREATE TABLE IF NOT EXISTS product (
             id SERIAL PRIMARY KEY,
-            name TEXT
-        )
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS ice_cream_type (
-            id SERIAL PRIMARY KEY,
-            name TEXT
+            name TEXT,
+            rate NUMERIC
         )
     """)
 
@@ -87,130 +79,86 @@ def index():
             id SERIAL PRIMARY KEY,
             vendor TEXT,
             product TEXT,
-            purchase_date DATE,
-            total NUMERIC,
-            advance NUMERIC,
-            pending NUMERIC,
-            status TEXT
+            quantity NUMERIC,
+            rate NUMERIC,
+            amount NUMERIC,
+            purchase_date DATE
         )
     """)
-    conn.commit()
-
-    # ---------- SAFE MIGRATION (FOR OLD DATABASES) ----------
-    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS ice_cream_type TEXT")
-    cur.execute("ALTER TABLE purchase ADD COLUMN IF NOT EXISTS quantity NUMERIC")
     conn.commit()
 
     # ---------- POST ----------
     if request.method == "POST":
 
+        # ADD VENDOR
         if request.form.get("new_vendor"):
             cur.execute("INSERT INTO vendor(name) VALUES(%s)",
                         (request.form["new_vendor"],))
             conn.commit()
             return redirect("/")
 
+        # DELETE VENDOR
+        if request.form.get("delete_vendor"):
+            cur.execute("DELETE FROM vendor WHERE name=%s",
+                        (request.form["delete_vendor"],))
+            conn.commit()
+            return redirect("/")
+
+        # ADD PRODUCT
         if request.form.get("new_product"):
-            cur.execute("INSERT INTO product(name) VALUES(%s)",
-                        (request.form["new_product"],))
+            cur.execute(
+                "INSERT INTO product(name,rate) VALUES(%s,%s)",
+                (request.form["new_product"], Decimal(request.form["rate"]))
+            )
             conn.commit()
             return redirect("/")
 
-        if request.form.get("new_type"):
-            cur.execute("INSERT INTO ice_cream_type(name) VALUES(%s)",
-                        (request.form["new_type"],))
+        # DELETE PRODUCT
+        if request.form.get("delete_product"):
+            cur.execute("DELETE FROM product WHERE name=%s",
+                        (request.form["delete_product"],))
             conn.commit()
             return redirect("/")
 
-        if request.form.get("delete_id"):
-            cur.execute("DELETE FROM purchase WHERE id=%s",
-                        (request.form["delete_id"],))
-            conn.commit()
-            return redirect("/")
-
-        if request.form.get("pay_id"):
-            pid = int(request.form["pay_id"])
-            received = Decimal(request.form["received"])
-            cur.execute("SELECT pending FROM purchase WHERE id=%s", (pid,))
-            old = Decimal(cur.fetchone()[0] or 0)
-            new = old - received
-            status = "Cleared" if new <= 0 else "Pending"
-            new = max(new, 0)
-
-            cur.execute("""
-                UPDATE purchase SET pending=%s, status=%s WHERE id=%s
-            """, (new, status, pid))
-            conn.commit()
-            return redirect("/")
-
-        # Purchase entry
-        total = Decimal(request.form["total"])
-        adv = Decimal(request.form["advance"])
+        # ADD PURCHASE (one product at a time – multiple allowed)
         qty = Decimal(request.form["quantity"])
-        pending = total - adv
-        status = "Cleared" if pending <= 0 else "Pending"
+        rate = Decimal(request.form["rate"])
+        amount = qty * rate
 
         cur.execute("""
             INSERT INTO purchase
-            (vendor, product, ice_cream_type, quantity,
-             purchase_date, total, advance, pending, status)
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+            (vendor, product, quantity, rate, amount, purchase_date)
+            VALUES (%s,%s,%s,%s,%s,%s)
         """, (
             request.form["vendor"],
             request.form["product"],
-            request.form["ice_cream_type"],
-            qty,
-            request.form["date"],
-            total, adv, pending, status
+            qty, rate, amount,
+            request.form["date"]
         ))
         conn.commit()
         return redirect("/")
 
-    # ---------- FILTER ----------
-    fv = request.args.get("filter_vendor")
-    fd = request.args.get("from_date")
-    td = request.args.get("to_date")
-
-    query = "SELECT * FROM purchase WHERE 1=1"
-    params = []
-
-    if fv:
-        query += " AND vendor=%s"
-        params.append(fv)
-    if fd and td:
-        query += " AND purchase_date BETWEEN %s AND %s"
-        params.extend([fd, td])
-
     # ---------- DASHBOARD ----------
-    cur.execute("""
-        SELECT COALESCE(SUM(total),0),
-               COALESCE(SUM(advance),0),
-               COALESCE(SUM(pending),0)
-        FROM purchase
-        WHERE DATE_TRUNC('month', purchase_date)
-              = DATE_TRUNC('month', CURRENT_DATE)
-    """)
-    total, received, pending = cur.fetchone()
+    # Total quantity sold (ALL products)
+    cur.execute("SELECT COALESCE(SUM(quantity),0) FROM purchase")
+    total_sold = cur.fetchone()[0]
 
-    # Ice cream type analysis
+    # Product-wise quantity sold
     cur.execute("""
-        SELECT ice_cream_type, COALESCE(SUM(quantity),0)
+        SELECT product, COALESCE(SUM(quantity),0)
         FROM purchase
-        GROUP BY ice_cream_type
+        GROUP BY product
     """)
-    type_sales = cur.fetchall()
+    product_sales = cur.fetchall()
 
     # ---------- FETCH ----------
     cur.execute("SELECT name FROM vendor")
     vendors = cur.fetchall()
 
-    cur.execute("SELECT name FROM product")
+    cur.execute("SELECT name, rate FROM product")
     products = cur.fetchall()
 
-    cur.execute("SELECT name FROM ice_cream_type")
-    types = cur.fetchall()
-
-    cur.execute(query + " ORDER BY id DESC", params)
+    cur.execute("SELECT * FROM purchase ORDER BY id DESC")
     purchases = cur.fetchall()
 
     conn.close()
@@ -219,12 +167,9 @@ def index():
         "index.html",
         vendors=vendors,
         products=products,
-        types=types,
         purchases=purchases,
-        total=total,
-        received=received,
-        pending=pending,
-        type_sales=type_sales
+        product_sales=product_sales,
+        total_sold=total_sold
     )
 
 if __name__ == "__main__":
