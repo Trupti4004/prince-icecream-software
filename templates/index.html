@@ -1,159 +1,153 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Prince Ice Cream ERP</title>
+    <title>Prince Ice Cream – Vendor Sales</title>
     <link rel="stylesheet" href="/static/style.css">
-    <script>
-        let items = [];
-
-        function addItem() {
-            const productSelect = document.getElementById("product");
-            const product = productSelect.value;
-            const rate = parseFloat(productSelect.selectedOptions[0].dataset.rate);
-            const qty = parseFloat(document.getElementById("quantity").value);
-
-            if (!product || !qty) {
-                alert("Select product and quantity");
-                return;
-            }
-
-            const amount = qty * rate;
-
-            items.push({
-                product: product,
-                quantity: qty,
-                rate: rate,
-                amount: amount
-            });
-
-            renderTable();
-        }
-
-        function renderTable() {
-            let table = document.getElementById("itemsTable");
-            table.innerHTML = "";
-            let total = 0;
-
-            items.forEach((i, index) => {
-                total += i.amount;
-                table.innerHTML += `
-                    <tr>
-                        <td>${i.product}</td>
-                        <td>${i.quantity}</td>
-                        <td>${i.rate}</td>
-                        <td>${i.amount}</td>
-                        <td><button type="button" onclick="removeItem(${index})">X</button></td>
-                    </tr>
-                `;
-            });
-
-            document.getElementById("totalAmount").innerText = total;
-            document.getElementById("items_json").value = JSON.stringify(items);
-        }
-
-        function removeItem(index) {
-            items.splice(index, 1);
-            renderTable();
-        }
-    </script>
 </head>
-
 <body>
 
 <header>
-    🍦 Prince Ice Cream ERP
-    <span style="float:right">
-        <a href="/logout" style="color:white">Logout</a>
-    </span>
+    🍦 Prince Ice Cream – Vendor Wise Product Sales
+    <a href="/logout" style="float:right;color:white;">Logout</a>
 </header>
 
 <div class="container">
 
-<!-- PURCHASE ENTRY -->
+<!-- FILTER -->
 <div class="card">
-    <h3>Create Bill (Multiple Products)</h3>
-
-    <form method="post">
-        <label>Vendor</label>
-        <select name="vendor" required>
+    <form method="get">
+        <select name="filter_vendor">
+            <option value="">All Vendors</option>
             {% for v in vendors %}
-            <option>{{ v[0] }}</option>
+            <option value="{{ v[1] }}">{{ v[1] }}</option>
             {% endfor %}
         </select>
-
-        <label>Date</label>
-        <input type="date" name="date" required>
-
-        <hr>
-
-        <label>Product</label>
-        <select id="product">
-            {% for p in products %}
-            <option value="{{ p[0] }}" data-rate="{{ p[1] }}">
-                {{ p[0] }} (₹{{ p[1] }})
-            </option>
-            {% endfor %}
-        </select>
-
-        <label>Quantity</label>
-        <input id="quantity" placeholder="Quantity">
-
-        <button type="button" onclick="addItem()">➕ Add Product</button>
-
-        <hr>
-
-        <table border="1" width="100%">
-            <thead>
-                <tr>
-                    <th>Product</th>
-                    <th>Qty</th>
-                    <th>Rate</th>
-                    <th>Amount</th>
-                    <th>Remove</th>
-                </tr>
-            </thead>
-            <tbody id="itemsTable"></tbody>
-        </table>
-
-        <h3>Total: ₹ <span id="totalAmount">0</span></h3>
-
-        <input type="hidden" name="items_json" id="items_json">
-
-        <button type="submit">💾 Save Bill</button>
+        <input type="date" name="from_date">
+        <input type="date" name="to_date">
+        <button>Apply Filter</button>
     </form>
 </div>
 
-<!-- BILL RECORDS -->
-<div class="card">
-    <h3>Saved Bills</h3>
+<!-- CARDS -->
+<div class="flex">
+    <div class="card">
+        <h3>Total Sold</h3>
+        <h2>{{ total_sold }}</h2>
+    </div>
 
-    {% for p in purchases %}
-    <div style="border:1px solid #ccc; padding:10px; margin-bottom:10px;">
-        <b>Vendor:</b> {{ p[1] }} <br>
-        <b>Date:</b> {{ p[2] }} <br>
-        <b>Total:</b> ₹ {{ p[3] }}
-
-        <table width="100%" border="1">
-            <tr>
-                <th>Product</th>
-                <th>Qty</th>
-                <th>Rate</th>
-                <th>Amount</th>
-            </tr>
-            {% for item in p[4] %}
-            <tr>
-                <td>{{ item.product }}</td>
-                <td>{{ item.quantity }}</td>
-                <td>{{ item.rate }}</td>
-                <td>{{ item.amount }}</td>
-            </tr>
-            {% endfor %}
-        </table>
+    {% for p in product_sales %}
+    <div class="card">
+        <h3>{{ p[0] }} Sold</h3>
+        <h2>{{ p[1] }}</h2>
     </div>
     {% endfor %}
 </div>
 
+<!-- MASTERS -->
+<div class="flex">
+
+<div class="card">
+<h3>Vendor Master</h3>
+<form method="post">
+<input name="new_vendor" placeholder="Vendor name" required>
+<button>Add</button>
+</form>
+<ul>
+{% for v in vendors %}
+<li>{{ v[1] }}
+<form method="post" style="display:inline;">
+<input type="hidden" name="delete_vendor_id" value="{{ v[0] }}">
+<button>❌</button>
+</form>
+</li>
+{% endfor %}
+</ul>
 </div>
 
+<div class="card">
+<h3>Product Master</h3>
+<form method="post">
+<input name="new_product" placeholder="Product name" required>
+<button>Add</button>
+</form>
+<ul>
+{% for p in products %}
+<li>{{ p[1] }}
+<form method="post" style="display:inline;">
+<input type="hidden" name="delete_product_id" value="{{ p[0] }}">
+<button>❌</button>
+</form>
+</li>
+{% endfor %}
+</ul>
+</div>
+
+<div class="card">
+<h3>Rate Master</h3>
+<form method="post">
+<select name="rate_product">
+{% for p in products %}
+<option>{{ p[1] }}</option>
+{% endfor %}
+</select>
+<input name="rate" placeholder="Rate" required>
+<button>Add</button>
+</form>
+<ul>
+{% for r in rates %}
+<li>{{ r[1] }} – ₹{{ r[2] }}
+<form method="post" style="display:inline;">
+<input type="hidden" name="delete_rate_id" value="{{ r[0] }}">
+<button>❌</button>
+</form>
+</li>
+{% endfor %}
+</ul>
+</div>
+
+</div>
+
+<!-- PURCHASE ENTRY -->
+<div class="card">
+<h3>Vendor Product Entry</h3>
+<form method="post">
+<select name="vendor" required>
+{% for v in vendors %}
+<option>{{ v[1] }}</option>
+{% endfor %}
+</select>
+
+<select name="product" required>
+{% for p in products %}
+<option>{{ p[1] }}</option>
+{% endfor %}
+</select>
+
+<input name="quantity" placeholder="Quantity" required>
+<input type="date" name="date" required>
+<button>Save</button>
+</form>
+</div>
+
+<!-- RECORDS -->
+<div class="card">
+<h3>Records</h3>
+<table>
+<tr>
+<th>Vendor</th><th>Product</th><th>Qty</th><th>Rate</th><th>Date</th>
+</tr>
+{% for r in purchases %}
+<tr>
+<td>{{ r[1] }}</td>
+<td>{{ r[2] }}</td>
+<td>{{ r[3] }}</td>
+<td>{{ r[4] }}</td>
+<td>{{ r[5] }}</td>
+</tr>
+{% endfor %}
+</table>
+</div>
+
+</div>
 </body>
 </html>
