@@ -1,43 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Prince Ice Cream | Vendor Sales</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>Vendor Sales</title>
 </head>
 <body>
 
-<h1>🍦 Prince Ice Cream – Vendor Sales Dashboard</h1>
+<h2>Dashboard</h2>
+<p>Total: ₹{{ total_amt }} | Received: ₹{{ received_amt }} | Pending: ₹{{ pending_amt }}</p>
 
-<div class="cards">
-    <div class="card blue">Total ₹ {{ total_amt }}</div>
-    <div class="card green">Received ₹ {{ received_amt }}</div>
-    <div class="card red">Pending ₹ {{ pending_amt }}</div>
-</div>
-
-<h2>Monthly Product Sales</h2>
-<div class="cards">
-{% for p in product_qty %}
-<div class="card">{{ p[0] }} : {{ p[1] }}</div>
-{% endfor %}
-</div>
-
-<h2>Vendor-wise Sales</h2>
-{% for s in sales %}
-<div class="vendor-card">
-<b>{{ s[1] }}</b><br>
-Product: {{ s[2] }} | Qty: {{ s[3] }}<br>
-Total: ₹{{ s[5] }} | Paid: ₹{{ s[6] }} | Pending: ₹{{ s[7] }}<br>
-Status: <b>{{ s[9] }}</b>
-
-{% if s[9] == "Pending" %}
+<h3>Add Sale</h3>
 <form method="post">
-<input type="hidden" name="pay_id" value="{{ s[0] }}">
-<input name="received" placeholder="Pay amount">
+<select name="vendor">{% for v in vendors %}<option>{{ v[0] }}</option>{% endfor %}</select>
+<select name="product">{% for p in products %}<option>{{ p[0] }}</option>{% endfor %}</select>
+<input name="quantity" placeholder="Qty">
+<input name="paid" placeholder="Paid">
+<input type="date" name="date">
+<button>Save</button>
+</form>
+
+<h3>Records</h3>
+<table border="1">
+<tr>
+<th>Vendor</th><th>Product</th><th>Qty</th><th>Total</th><th>Paid</th><th>Pending</th><th>Status</th><th>Action</th>
+</tr>
+{% for r in sales %}
+<tr>
+<td>{{ r[1] }}</td>
+<td>{{ r[2] }}</td>
+<td>{{ r[3] }}</td>
+<td>{{ r[5] }}</td>
+<td>{{ r[6] }}</td>
+<td>{{ r[7] }}</td>
+<td>{{ r[9] }}</td>
+<td>
+{% if r[9] == "Pending" %}
+<form method="post">
+<input type="hidden" name="pay_id" value="{{ r[0] }}">
+<input name="received" placeholder="Pay">
 <button>Update</button>
 </form>
 {% endif %}
-</div>
+</td>
+</tr>
 {% endfor %}
+</table>
+
+<a href="/logout">Logout</a>
 
 </body>
 </html>
